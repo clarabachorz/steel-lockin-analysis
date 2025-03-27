@@ -1,0 +1,147 @@
+```{r setup, include = FALSE}
+path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/Analysis/"
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(
+    root.dir = path
+    )
+
+
+library(ggplot2)
+library(gdx)
+require(dplyr)
+options(dplyr.summarise.inform = FALSE)
+library(tidyr)
+library(quitte)
+library(lusweave)
+library(ggsci)
+library(pals)
+```
+
+```{R}
+
+
+
+###################################################
+# CONFIG
+
+
+# gdx <- "./npi_capbound.gdx"
+gdx <- "./650_capboundold.gdx"
+# gdx <- "./1000.gdx"
+
+plotted_years <- c(2030, 2040, 2050)
+plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
+fs = 10 # font size
+
+route_names <- tribble(
+  ~route,          ~route_name,
+  "bfbof",         "BF-BOF",
+  "bfbof_ccs",     "BF-BOF CCS",
+  "idreaf_ng_ccs", "DRI-EAF NG CCS",
+  "idreaf_ng",     "DRI-EAF NG",
+  "idreaf_h2",     "DRI-EAF H2",
+  "seceaf",        "Scrap EAF",
+)
+
+component_names <- tribble(
+  ~component,      ~component_name, ~color,
+ "CO2",           "Emission Cost", "#444444",
+ # "inje",          "CCS Injection", "#999999",
+ "feels",         "Electricity",   "#a2dd85",
+ "feh2s",         "Hydrogen",      "#85b3dd",
+  "fegas",         "Non-H2 Gases",  "#dda185",
+  "fehos",         "Liquids",       "#b185dd",
+  "fesos",         "Solids",        "#c4b962",
+  "eafscrap",      "Scrap",         "#225577",
+  "bofscrap",      "Scrap",         "#225577",
+  "ironore",       "Iron Ore",      "#774444",
+  "dripell",       "DRI Pellets",   "#447744",
+  "OPEX",          "OPEX",          "#cccccc",
+  "CAPEX",         "CAPEX",         "#555555"
+)
+    
+    
+# region_names  <- tribble(
+#   ~region, ~region_name,
+#   # 'JPN',   'Japan',
+#   # 'CAZ',   'Australia*'
+#   'EUR',   'EU',
+#   'CHA',   'China',
+#   'USA',   'USA',
+#   'IND',   'India'
+# )
+
+###################################################
+# READ IN GENERIC SETS
+
+tePrc <- readGDX(gdx,"tePrc")
+# tePrcAll <- append(tePrc, "ccsinje") ## do not use ccsinje cost anymore (is included in vm_co2capture cost)
+tePrcAll <- tePrc
+
+tePrc2opmoPrc <- as.data.frame(readGDX(gdx,"tePrc2opmoPrc")) %>% 
+  rename(all_te = tePrc)
+
+entyFE <- as.vector(readGDX(gdx, name="entyFE"))
+
+t <- readGDX(gdx,"ttot")
+t <- as.numeric(t[t >= 2005 & t <= 2100])
+
+regi <- readGDX(gdx,"regi")
+```	
+
+```{r steel caps, echo = FALSE}	
+
+# add capacity 
+df.cap <- as.quitte(readGDX(gdx, "vm_cap", field="l", restore_zeros = F)[,t,]) %>%
+    select(region, period, all_te, rlf, value) %>%
+    filter(all_te %in% tePrcAll ) %>%
+    rename(cap = value)
+
+test <- df.cap %>% 
+  filter(region == "IND", all_te == "bof", rlf == 1)
+test
+
+```	
+
+```{r steel deltacaps, echo = FALSE}
+
+#df.deltacap <- as.quitte(readGDX(gdx, "vm_deltaCap", field="l", restore_zeros = F)[,t,]) %>%
+df.deltacap <- as.quitte(readGDX(gdx, "vm_capFac", field="l", restore_zeros = F)[,t,]) %>%
+    select(region, period, all_te, rlf, value) %>%
+    filter(all_te %in% tePrcAll ) %>%
+    rename(deltacap = value)
+
+# test <- df.deltacap %>% 
+#   filter(region == "CHA", all_te == "bof", rlf == 1)
+# test
+test <- df.deltacap %>% 
+  filter(region == "CHA", all_te == "dac")
+test
+```
+
+```{r steel earlyreti, echo = FALSE}
+
+df.earlyreti <- as.quitte(readGDX(gdx, "vm_capEarlyReti", field="l", restore_zeros = F)[,t,]) %>%
+#df.earlyreti <- as.quitte(readGDX(gdx, "pm_regiEarlyRetiRate", field="l", restore_zeros = F)) %>%
+    select(period,region, all_te, value) %>%
+    filter(all_te %in% tePrcAll ) %>%
+    rename(earlyreti = value)
+
+test <- df.earlyreti %>% 
+  filter(region == "CHA", all_te == "bof")
+test
+
+```
+
+```{r steel output, echo = FALSE}
+vm_outflowPrc(t,regi,tePrc,opmoPrc)
+df.production <- as.quitte(readGDX(gdx, "vm_outflowPrc", field="l", restore_zeros = F)[,t,]) %>%
+    select(period, region, all_te, opmoPrc, value) %>%
+    filter(all_te %in% tePrcAll ) %>%
+    rename(production = value)
+
+test <- df.production %>% 
+  filter(region == "IND", all_te == "bof", opmoPrc == "unheated")
+test
+
+```
