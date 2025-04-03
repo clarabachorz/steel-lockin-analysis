@@ -19,12 +19,9 @@ library(pals)
 library(stringr)
 ```
 
-```{r RIKEN load, echo = FALSE}
-#riken gdx
-early_trans <- "REMIND_EarlyTransition.gdx"
-base <- "REMIND_StatusQuo.gdx"
-prolonged_lockin <- "REMIND_ProlongedLockIn.gdx"
-max_lockin <- "REMIND_ExtendedFossilDependence.gdx"
+```{r load, echo = FALSE}
+#LOAD GDX
+max_lockin <- "<...>.gdx"
 
 ```
 
@@ -34,10 +31,8 @@ max_lockin <- "REMIND_ExtendedFossilDependence.gdx"
 ###################################################
 # CONFIG
 
-# gdx <- "./650_govtargets.gdx"
 gdx <- max_lockin
 #name for plotting
-#name <- "Prolonged lifetime scenario"
 name <- "Policy-extended fossil lock-in"
 
 

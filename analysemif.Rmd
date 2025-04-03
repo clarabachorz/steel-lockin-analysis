@@ -1,7 +1,5 @@
-### Setup libraries
-Download necessary libraries
 ```{r setup, include = FALSE}
-path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/Analysis/"
+path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/AnalysisScript/"
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
     root.dir = path
@@ -11,66 +9,463 @@ require(ggplot2)
 require(tidyverse)
 require(mrremind)
 require(magclass)
-library(quitte)
 require(quitte)
+library("quitte")
 library(dplyr)
 library(gridExtra)
 library(grid)
+library(purrr)
 ```
 
 ```{r load data}
-mifdata <- read.quitte("REMIND_generic_default.mif")
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoRetiReliningGovTarget-PkBudg650.mif")
+mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-1-PkBudg650.mif")
+mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-2-PkBudg650.mif")
 
+mifdata4 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS-PkBudg650.mif")
+mifdata5 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreBFCCS-PkBudg650.mif")
+mifdata6 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS_BFCCSEarlyReti-PkBudg650.mif")
+
+#other lock in scenarios
+mifdata7 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBound-PkBudg650.mif")
+mifdata8 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoReti-PkBudg650.mif")
+mifdata9 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoRetiRelining-PkBudg650.mif")
+
+mifdata1 <- mifdata1 %>%
+  mutate(scenario = "Base H2 cost")
+  # mutate(scenario = "Policy Extended Transition")
+
+mifdata2 <- mifdata2 %>%
+  mutate(scenario = "High H2 cost")
+
+mifdata3 <- mifdata3 %>%
+  mutate(scenario = "Very high H2 cost")
+
+mifdata4 <- mifdata4 %>%
+  mutate(scenario = "More CCS injection capacity")
+
+mifdata5 <- mifdata5 %>%
+  mutate(scenario = "Early retirement of BF-BOF-CCS")
+
+mifdata6 <- mifdata6 %>%
+  mutate(scenario = "More CCS injection capacity +\nearly retirement of BF-BOF-CCS")
+
+mifdata7 <- mifdata7 %>%
+  mutate(scenario = "Early Transition")
+
+mifdata8 <- mifdata8 %>%
+  mutate(scenario = "Base Transition")
+
+mifdata9 <- mifdata9 %>%
+  mutate(scenario = "Extended Lifetime Transition")
+
+```
+
+```{r plot params, echo = FALSE}	
+
+fs = 10 # font size
+
+steel_route <- tribble(
+  ~route,          ~route_name, ~color,
+  "BF-BOF",         "BF-BOF",    "#080808",
+  "BF-BOF-CCS",     "BF-BOF CCS",    "#a0a0a0",
+  "DRI-NG-EAF-CCS", "DRI-EAF NG CCS",    "#8fd1af",
+  "DRI-NG-EAF",     "DRI-EAF NG",    "#06b429",
+  "DRI-H2-EAF",     "DRI-EAF H2",    "#17cff0",
+  "SCRAP-EAF",        "Scrap EAF",   "#fbfb0d",
+)
 ```
 
 ```{r change data, echo = FALSE}
 
-steel_df <- mifdata %>%
-  filter(str_detect(variable, "Steel")) %>%
-  filter(str_detect(variable, "Production"))
+mifdata_list <- list(mifdata1, mifdata2, mifdata3)
+ccs_list <- list(mifdata1, mifdata4, mifdata5, mifdata6)
+
+lockin_list <- list(mifdata1,mifdata7, mifdata8, mifdata9)
 
 #filter breakdown of steel production
-prsteel_df <- mifdata %>%
-  filter(grepl("Production|Industry|Steel|+",
-                variable,
-                ignore.case = TRUE, 
-                fixed = TRUE)) %>% # nolint
-  filter(#period == 2020,
-         region == "World",
-         unit == "Mt/yr",
-         #scenario == "SSP2-Base",
-         )
+process_data <- function(df) {
+  df %>%
+    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+    filter(region == "World", unit == "Mt/yr") %>%
+    filter(between(period, 2020, 2100)) %>%
+    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
+    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) 
+    # %>%
+    # filter(variable != "SCRAP-EAF") #remove secondary steel
+}
 
-#playing around, exploring steel parameters
-steel_df <- mifdata %>%
-  filter(grepl("Production|Industry|Steel",
-                variable,
-                ignore.case = TRUE, 
-                fixed = TRUE)) %>% # nolint
-  filter(period == 2020,
-         region == "World",
-         unit != "Mt/yr",
-         #scenario == "SSP2-Base",
-         )
-steel_df$variable
+process_data_ccs <- function(df) {
+  df %>%
+    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+    filter(between(period, 2020, 2100)) %>%
+    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
+    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
+    filter(variable != "SCRAP-EAF") #remove secondary steel
+}
+
+process_data_lockin <- function(df) {
+  df %>%
+    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+    filter(region == "World", unit == "Mt/yr") %>%
+    filter(between(period, 2020, 2100)) %>%
+    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
+    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
+    filter(variable != "SCRAP-EAF") #remove secondary steel
+}
+
+#get full df
+prsteel_df <- mifdata_list %>%
+  map_dfr(process_data)
+
+ccsscen_df <- ccs_list %>%
+  map_dfr(process_data_ccs)
+
+lockin_df <- lockin_list %>%
+  map_dfr(process_data_lockin)
+
+#calculate h2 shareh2_ in total primary steel
+h2_share <- prsteel_df %>%
+  group_by(period, scenario) %>%
+  summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
+  mutate(h2_share = h2_share*100) #to percent 
+
+h2_share_lockin <- lockin_df %>%
+  group_by(period, scenario) %>%
+  summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
+  mutate(h2_share = h2_share*100) #to percent
+
+#calculate amount of H2 dri
+h2_dri <- prsteel_df %>%
+  filter(variable == "DRI-H2-EAF") %>%
+  group_by(period, scenario) %>%
+  summarise(value = sum(value))
+
+ccs_share <- ccsscen_df %>%
+  group_by(period, scenario, region) %>%
+  summarise(ccs_share = sum(value[variable == "BF-BOF-CCS"]) / sum(value)) %>%
+  mutate(ccs_share = ccs_share*100) #to percent
+
+all_steel_shares <- ccsscen_df %>%
+  group_by(period, scenario, region) %>%
+  summarise(
+    total_production = sum(value, na.rm = TRUE),
+    h2_share = sum(value[variable == "DRI-H2-EAF"], na.rm = TRUE) / total_production,
+    bf_bof_ccs_share = sum(value[variable == "BF-BOF-CCS"], na.rm = TRUE) / total_production,
+    bf_bof_share = sum(value[variable == "BF-BOF"], na.rm = TRUE) / total_production,
+    ng_share = sum(value[variable == "DRI-NG-EAF"], na.rm = TRUE) / total_production
+  )
+
+head(all_steel_shares)
+
+
 ```
 
-```{r plot, echo = FALSE}	
+```{r plot h2 share, echo = FALSE}
 
-# filter out secondary steel for now
-prsteel_df <- prsteel_df %>% 
-  filter(variable != "Production|Industry|Steel|+|SCRAP-EAF")
+h2_share_plot <- h2_share
 
-# Reorder levels of 'variable' factor
-prsteel_df$variable <- factor(prsteel_df$variable,
-                               levels = c(rev(levels(prsteel_df$variable))),# nolint
-                               #labels = c(rev(levels(prsteel_df$variable)[!levels(prsteel_df$variable) %in% secondary_steel],)secondary_steel),# nolint
-                               )
+#factors for scenarios
+# h2_share_plot$scenario <- factor(h2_share_plot$scenario, levels = c("Base H2 cost", "High H2 cost", "Very high H2 cost"))
+
+
+#make line plot of h2 share, one line for each scenario
+
+ggplot(h2_share_plot, aes(x = period, y = h2_share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 0.8) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Share of DRI-H2-EAF in total steel production",
+       x = "Time",
+       y = "DRI-H2-EAF share (%)",
+       color = "Scenario") +
+  # scale_color_viridis_d(option = "C") +
+  scale_color_manual(values = c("#0d55c9", "#22cdbc", "#8586bc", "#3d3d3f","#8d8d92", "#41415d")) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+#save
+#ggsave("h2_share.png", width = 8, height = 5, dpi = 300)
+```
+
+```{r plot h2 share lockin scen, echo = FALSE}
+
+# h2_share_plot <- h2_share_lockin
+
+#factors for scenarios
+# h2_share_plot$scenario <- factor(h2_share_plot$scenario, levels = c("Base H2 cost", "High H2 cost", "Very high H2 cost"))
+
+
+#make line plot of h2 share, one line for each scenario
+
+ggplot(h2_share_lockin, aes(x = period, y = h2_share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 0.8) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Share of DRI-H2-EAF in primary steel production",
+       x = "Time",
+       y = "DRI-H2-EAF share (%)",
+       color = "Scenario") +
+  # scale_color_viridis_d(option = "C") +
+  scale_color_manual(values = c("#7BADAE", "#6E8980", "#757A67", "#8A704E")) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+#save
+# ggsave("h2_share_lockin.png", width = 8, height = 5, dpi = 300)
+```
+
+```{r plot h2 dri, echo = FALSE}
+
+#factors for scenarios
+# h2_dri$scenario <- factor(h2_dri$scenario, levels = c("Base H2 cost", "High H2 cost", "Very high H2 cost", "More CCS injection capacity", "More CCS injection capacity +\nearly retirement of BF-BOF-CCS"))
+
+
+
+ggplot(h2_dri, aes(x = period, y = value, color = scenario)) +
+  geom_line(size = 0.6, alpha = 0.8) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "DRI-H2-EAF steel production",
+       x = "Time",
+       y = "Steel production (Mt/yr)",
+       color = "Scenario") +
+  # scale_color_viridis_d(option = "C") +
+  scale_color_manual(values = c("#0d55c9", "#22cdbc", "#8586bc", "#3d3d3f", "#41415d")) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  )+
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+```
+
+```{r plot ccs share, echo = FALSE}
+
+ccs_share_glob <- ccs_share %>%
+  filter(region == "World") %>%
+  select(-region)
+
+#rename "base H2 cost" to "Base H2 cost"
+ccs_share_glob$scenario <- gsub("Base H2 cost", "Base CCS assumption", ccs_share_glob$scenario)
+
+#factors for scenarios
+ccs_share_glob$scenario <- factor(ccs_share_glob$scenario, levels = c("Base CCS assumption", "More CCS injection capacity","Early retirement of BF-BOF-CCS", "More CCS injection capacity +\nearly retirement of BF-BOF-CCS"))
+
+#plot
+ggplot(ccs_share_glob, aes(x = period, y = ccs_share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 1) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Share of BF-BOF-CCS in total primary steel production (World)",
+       x = "Time",
+       y = "BF-BOF-CCS share (%)",
+       color = "Scenario") +
+  scale_color_viridis_d(option = "inferno", end = 0.8, direction = -1) +
+  #scale_color_manual(values = c("#c6c9cd", "#928166", "#8d5252", "#000000")) +
+  #add y limit
+  ylim(0, 100) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  )+
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+#save
+# ggsave("ccs_share_global.png", width = 8, height = 5, dpi = 300)
+```
+
+```{r plot ccs share, echo = FALSE}
+
+ccs_share_IND <- ccs_share %>%
+  filter(region == "IND") %>%
+  select(-region)
+
+#rename "base H2 cost" to "Base H2 cost"
+ccs_share_IND$scenario <- gsub("Base H2 cost", "Base CCS assumption", ccs_share_IND$scenario)
+
+#factors for scenarios
+ccs_share_IND$scenario <- factor(ccs_shar_INDe$scenario, levels = c("Base CCS assumption", "More CCS injection capacity","Early retirement of BF-BOF-CCS", "More CCS injection capacity +\nearly retirement of BF-BOF-CCS"))
+
+#plot
+ggplot(ccs_share_IND, aes(x = period, y = ccs_share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 1) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Share of BF-BOF-CCS in total primary steel production (India)",
+       x = "Time",
+       y = "BF-BOF-CCS share (%)",
+       color = "Scenario") +
+  scale_color_viridis_d(option = "inferno", end = 0.8) +
+  #scale_color_manual(values = c("#c6c9cd", "#928166", "#8d5252", "#000000")) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  )+
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+```
+
+```{r plot ccs share, echo = FALSE}
+
+ccs_share_CHA <- ccs_share %>%
+  filter(region == "CHA") %>%
+  select(-region)
+
+#rename "base H2 cost" to "Base H2 cost"
+ccs_share_CHA$scenario <- gsub("Base H2 cost", "Base CCS assumption", ccs_share_CHA$scenario)
+
+#factors for scenarios
+ccs_share_CHA$scenario <- factor(ccs_share_CHA$scenario, levels = c("Base CCS assumption", "More CCS injection capacity","Early retirement of BF-BOF-CCS", "More CCS injection capacity +\nearly retirement of BF-BOF-CCS"))
+
+#plot
+ggplot(ccs_share_CHA, aes(x = period, y = ccs_share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 1) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Share of BF-BOF-CCS in total primary steel production (China)",
+       x = "Time",
+       y = "BF-BOF-CCS share (%)",
+       color = "Scenario") +
+  scale_color_viridis_d(option = "inferno", end = 0.8, direction = -1) +
+  #scale_color_manual(values = c("#c6c9cd", "#928166", "#8d5252", "#000000")) +
+  # theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  )+
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+#save
+# ggsave("ccs_share_oas.png", width = 8, height = 5, dpi = 300)
+```
+
+```{r plot ccs area plots, echo = FALSE}
+
+plot_df <- all_steel_shares %>%
+  filter(region == "World") %>%
+  select(-total_production) %>%  # Remove unnecessary column
+  pivot_longer(cols = ends_with("_share"), 
+               names_to = "steel_route", 
+               values_to = "share")  # Convert to long format for ggplot
+
+# Improve steel_route labels
+plot_df$steel_route <- recode(plot_df$steel_route,
+                              "h2_share" = "DRI-H2-EAF",
+                              "bf_bof_ccs_share" = "BF-BOF-CCS",
+                              "bf_bof_share" = "BF-BOF",
+                              "ng_share" = "DRI-NG-EAF")
+
+plot_df <- plot_df %>%
+  left_join(steel_route, by = c("steel_route" = "route"))
+
+plot_df$steel_route <- factor(plot_df$steel_route, 
+                              levels = c( "DRI-NG-EAF", "DRI-H2-EAF","BF-BOF-CCS","BF-BOF"))
+
+color_mapping <- setNames(plot_df$color, plot_df$steel_route)
+
+# Plot
+ggplot(plot_df, aes(x = period, y = share, fill = steel_route)) +
+  geom_area(alpha = 0.7) +  # Stacked area plot
+  scale_fill_manual(values = color_mapping) +
+  labs(title = "Steel Production Share by Route",
+       x = "Year",
+       y = "Share (%)",
+       fill = "Steel Route") +
+  facet_wrap(~scenario) +  # Separate plots for each scenario
+  scale_y_continuous(labels = scales::percent_format()) +  # Show % format
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+
+# COMBINED PLOT
+
+
+# # Create a new column for the combined share of BF-BOF and BF-BOF CCS
+plot_df <- plot_df %>%
+  group_by(period, scenario) %>%
+  mutate(combined_bf_bof_share = sum(share[steel_route %in% c("BF-BOF", "BF-BOF-CCS")])) %>%
+  ungroup()
+
+
+#COMBINE area plots
+unique_scenarios <- unique(plot_df$scenario)
+
+# Plot
+ggplot() +
+  geom_area(data = plot_df %>% filter(scenario == unique_scenarios[1]),
+            aes(x = period, y = share, fill = steel_route), alpha = 0.25) +
+  geom_area(data = plot_df %>% filter(scenario == unique_scenarios[2]),
+            aes(x = period, y = share, fill = steel_route), alpha = 0.25) +
+  geom_area(data = plot_df %>% filter(scenario == unique_scenarios[3]),
+            aes(x = period, y = share, fill = steel_route), alpha = 0.25) +
+  geom_area(data = plot_df %>% filter(scenario == unique_scenarios[4]),
+            aes(x = period, y = share, fill = steel_route), alpha = 0.25) +
+  scale_fill_manual(values = color_mapping) +
+  labs(title = "Steel Production Share by Route",
+       x = "Year",
+       y = "Share (%)",
+       fill = "Steel Route") +
+  scale_y_continuous(labels = scales::percent_format()) +  # Show % format
+  theme_minimal() +
+  # Overlay lines showing combined BF-BOF + BF-BOF CCS share with scenario-dependent linetype
+  # geom_line(data = plot_df,
+  #           aes(x = period, y = combined_bf_bof_share, group = scenario, color = scenario, linetype = scenario),
+  #           size = 1.2) +
+  # # Overlay lines showing BF-BOF share with scenario-dependent linetype
+  geom_line(data = plot_df %>% filter(steel_route == "BF-BOF"),
+            aes(x = period, y = share, group = scenario, color = scenario, linetype = scenario),
+            size = 1.2) +
+  # Add a legend for the lines
+  #color only white
+  #scale_color_manual(name = "Scenario", values = setNames(c("#010101", "#ff6200", "#cb0ece", "#ffffff"), unique_scenarios)) +
+  scale_linetype_manual(name = "Scenario", values = setNames(c("solid", "dashed", "dotted", "dotdash"), unique_scenarios)) +
+  guides(linetype = guide_legend(title = "Line Type"),
+        )
+
+```
+```{r plot primary steel, echo = FALSE}	
+
+# # Reorder levels of 'variable' factor
+plot_df$variable <- factor(plot_df$variable,levels = c(
+  "DRI-NG-EAF-CCS",
+  "DRI-NG-EAF",
+  "DRI-H2-EAF",
+  "BF-BOF-CCS",
+  "BF-BOF"))
+
+plot_df <- plot_df %>%
+  mutate(color = steel_route$color[match(variable, steel_route$route)])
+
+color_mapping <- setNames(steel_route$color[match(levels(plot_df$variable), steel_route$route)], 
+                        levels(plot_df$variable))
 
 # Steel production Plot:
 # TODO: separate primary and secondary steel somehow
-ggplot(prsteel_df, aes(x = period)) +
+ggplot(plot_df, aes(x = period)) +
   geom_area(aes(y = value, fill = variable), alpha = 0.5) +
+  scale_fill_manual(values = color_mapping) +
   labs(title = "Primary Steel production by technology type",
        x = "Time",
        y = "Primary Steel Production (Mt/yr)") +
@@ -78,328 +473,4 @@ ggplot(prsteel_df, aes(x = period)) +
 
 #Plot steel CO2 emissions intensity + share of secondary steel in total mix on the same graph (different y axes?)
 
-```
-
-```{r RIKEN load, echo = FALSE}
-setwd("C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/AnalysisScript/RIKEN")
-#riken mifs
-early_trans <- read.quitte("REMIND_generic_EarlyTransitionPathway_LowLockIn.mif")
-prolonged_lockin <- read.quitte("REMIND_generic_ProlongedFossilSteelLockIn.mif")
-extended_lockin <- read.quitte("REMIND_generic_ExtendedFossilDependence.mif")
-statusquo <- read.quitte("REMIND_generic_StatusQuoLockIn.mif")
-
-```
-
-```{r RIKEN filter, echo = FALSE}
-
-filter_mifdata <- function(df) {
-  df %>%
-    filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
-                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
-                 variable,
-                 ignore.case = TRUE, 
-                 fixed = TRUE)) %>%
-    filter(between(period, 2025, 2070),
-    #filter(between(period, 2020, 2050),
-           region == "World") %>%
-    select(-model, -region) %>%
-    group_by(period) %>%
-    mutate(total_CO2_yearly = sum(value, na.rm = TRUE),
-          total_CO2_5year = total_CO2_yearly * 5) %>%
-    ungroup() %>%
-    # comment below out if you want to have the full df
-    select(scenario, unit, period, total_CO2_yearly, total_CO2_5year)
-}
-
-# List of data frames
-# df_list <- list(df1 = df1, df2 = df2, df3 = df3, df4 = df4)
-df_list <- list(df1 = early_trans, df2 = prolonged_lockin, df3 = extended_lockin, df4 = statusquo)
-# Apply filtering to all data frames
-filtered_dfs <- lapply(df_list, filter_mifdata)
-
-#remove duplicates (only if not wanting the aggregate data)
-filtered_dfs <- lapply(filtered_dfs, distinct)
-
-# Extract results
-early_trans_filtered <- filtered_dfs$df1
-prolonged_lockin_filtered <- filtered_dfs$df2
-extended_lockin_filtered <- filtered_dfs$df3
-statusquo_filtered <- filtered_dfs$df4
-
-early_trans_filtered <- early_trans_filtered %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  mutate(across(scenario, str_replace,"SteelCapBound-PkBudg650" ,"Early Transition Pathway (Low Lock-In)"))
-
-prolonged_lockin_filtered <- prolonged_lockin_filtered %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoRetiReliningGovTarget-PkBudg650" ,"Prolonged Fossil-Steel Lock-In"))
-
-extended_lockin_filtered <- extended_lockin_filtered %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoRetiRelining-PkBudg650" ,"Extended Fossil Dependence"))
-
-statusquo_filtered <- statusquo_filtered %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoReti-PkBudg650" ,"Status Quo Lock-In"))
-
-
-RIKEN_df <- bind_rows(early_trans_filtered, prolonged_lockin_filtered, extended_lockin_filtered, statusquo_filtered)
-RIKEN_df_cumuCO2 <- RIKEN_df %>%
-  group_by(scenario) %>%
-  summarise(cumu_CO2 = max(cumu_CO2))
-```
-```{r pot em global, echo = FALSE}
-#adjust factors
-RIKEN_df$scenario <- factor(RIKEN_df$scenario, levels = c("Early Transition Pathway (Low Lock-In)","Status Quo Lock-In", "Extended Fossil Dependence","Prolonged Fossil-Steel Lock-In"))
-RIKEN_df_cumuCO2$scenario <- factor(RIKEN_df_cumuCO2$scenario, levels = c("Early Transition Pathway (Low Lock-In)","Status Quo Lock-In", "Extended Fossil Dependence", "Prolonged Fossil-Steel Lock-In"))
-
-
-#BOSCH talk colors
-custom_colors <- c(
-  "Early Transition Pathway (Low Lock-In)" = "#7BADAE",
-  "Status Quo Lock-In" = "#6E8980",
-  "Extended Fossil Dependence" = "#757A67",
-  "Prolonged Fossil-Steel Lock-In" = "#8A704E"
-)
-
-
-ggplot(RIKEN_df_cumuCO2, 
-                   aes(x = scenario, y = cumu_CO2/1e3, fill = scenario)) +
-  geom_bar(stat = "identity", width = 0.8) +
-  scale_fill_viridis_d(option = "plasma", end = 0.9) +
-  #scale_fill_manual(values = custom_colors) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 15)) +
-  labs(title = "Cumulative CO2 Emissions (2020-2050)\nfrom steel production, by scenario",
-       x = "Scenario",
-       y = "Cumulative CO2 (Gt CO2)") +
-  theme_classic() +
-  guides(fill="none")+
-  # scale_y_continuous(
-  #   name = "Cumulative CO2 (Gt CO2)",
-  #   # sec.axis = sec_axis(~ . * 0.00045, name = "Temperature Increase (°C)")
-  #   sec.axis = sec_axis(~ ((. / 650)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
-  # ) +
-    theme(
-      #plot margin to combine as subfigure with lineplot below
-    plot.margin = margin(5, 0, 14, 5),
-    text = element_text(size = 7.5),
-    title = element_text(size = 8),
-    axis.title = element_text(size = 7.5),
-    axis.text = element_text(size=7),
-    axis.text.x = element_text(angle = 0, hjust = 0.5),
-    panel.grid.major = element_line(linetype = "dashed", color = "gray70",
-    )
-  )
-ggsave("RIKEN_cumuCO2.png", width = 79, height = 90.3, units = "mm", dpi = 300)
-
-```
-
-```{r plot line global, echo = FALSE}
-RIKEN_df$scenario <- factor(RIKEN_df$scenario, levels = c("Early Transition Pathway (Low Lock-In)","Status Quo Lock-In", "Extended Fossil Dependence","Prolonged Fossil-Steel Lock-In"))
-
-# Line plot for total_CO2_yearly over time, colored by scenario
-ggplot(RIKEN_df, aes(x = period, y = total_CO2_yearly, color = scenario)) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 1.5) +
-  # scale_colour_discrete(labels = function(x) str_wrap(x, width = 10)) +
-  scale_colour_viridis_d(option = "plasma", end = 0.9, 
-                        labels = function(x) str_wrap(x, width = 22)) +
-  labs(title = "a) Yearly Steel CO2 Emissions by scenario\n",
-       x = "Year",
-       y = "Yearly CO2 Emissions (Mt CO2/yr)") +
-  theme_classic() +
-  theme(
-     plot.margin = margin(10, 10, 2, 10),
-    text = element_text(size = 7.5),
-    title = element_text(size = 8),
-    legend.text = element_text(size = 6),
-    legend.title = element_text(size = 6.5),
-    axis.title = element_text(size = 7.5),
-    axis.text = element_text(size=7),
-    #axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom",
-    legend.key.height = unit(2.5, "mm"),
-    legend.key.width = unit(4, "mm"),
-    legend.margin = margin(0, 0, 0, 0),
-    legend.box = "horizontal",
-    panel.grid.major = element_line(linetype = "dashed", color = "gray70")
-  ) +
-  guides(color = guide_legend(title = "Scenario", ncol = 2, 
-                              byrow = TRUE, override.aes = list(size = 2)))
-
-#save
-#ggsave("RIKEN_yearlyCO2.png", width = 79, height = 90.3, units = "mm", dpi = 300)
-```
-```{r RIKEN test filter, echo = FALSE}
-
-filter_mifdata_industryem <- function(df) {
-  df %>%
-    filter(grepl("Emi|CO2|Energy|Demand|Industry|++",
-                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
-                 variable,
-                 ignore.case = TRUE, 
-                 fixed = TRUE)) %>%
-    # filter(between(period, 2020, 2060),
-    filter(between(period, 2025, 2070),
-          #  region == "World") %>%
-          region %in% c("World", "IND", "CHA")) %>% 
-    select(-model) %>%
-    mutate(variable = gsub("Emi|CO2|Energy|Demand|Industry|\\+\\+|", "", variable)) %>%
-    mutate(variable = gsub("\\|+", "", variable)) %>%
-    mutate(variable = gsub(" ", "", variable)) %>%
-    mutate(total_CO2_5year = value * 5)
-    # # comment below out if you want to have the full df
-    # select(scenario, unit, period, total_CO2_yearly, total_CO2_5year)
-}
-
-# List of data frames
-df_list <- list(df1 = early_trans, df2 = prolonged_lockin, df3 = extended_lockin, df4 = statusquo)
-# Apply filtering to all data frames
-filtered_dfs <- lapply(df_list, filter_mifdata_industryem)
-
-#remove duplicates (only if not wanting the aggregate data)
-filtered_dfs <- lapply(filtered_dfs, distinct)
-
-# Extract results
-early_trans_em <- filtered_dfs$df1
-prolonged_lockin_em <- filtered_dfs$df2
-extended_lockin_em <- filtered_dfs$df3
-statusquo_em <- filtered_dfs$df4
-
-early_trans_em <- early_trans_em %>%
-  group_by(variable, region) %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  ungroup() %>%
-  mutate(across(scenario, str_replace,"SteelCapBound-PkBudg650" ,"Early Transition Pathway (Low Lock-In)"))
-
-prolonged_lockin_em <- prolonged_lockin_em %>%
-  group_by(variable, region) %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  ungroup() %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoRetiReliningGovTarget-PkBudg650" ,"Prolonged Fossil-Steel Lock-In"))
-
-extended_lockin_em <- extended_lockin_em %>%
-  group_by(variable, region) %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  ungroup() %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoRetiRelining-PkBudg650" ,"Extended Fossil Dependence"))
-
-statusquo_em <- statusquo_em %>%
-  group_by(variable, region) %>%
-  mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-  ungroup() %>%
-  mutate(across(scenario, str_replace,"SteelCapBoundNoReti-PkBudg650" ,"Status Quo Lock-In"))
-
-
-RIKEN_df <- bind_rows(early_trans_em, prolonged_lockin_em, extended_lockin_em, statusquo_em)
-RIKEN_df_cumuCO2sectors <- RIKEN_df %>%
-  group_by(scenario, region, variable) %>%
-  summarise(cumu_CO2 = max(cumu_CO2)) %>%
-  mutate(cumu_CO2 = cumu_CO2 / 1e3) # to GtCO2
-
-RIKEN_df_cumuCO2sectorsglobal <- RIKEN_df_cumuCO2sectors %>%
-  filter(region == "World")
-```
-
-```{r plot cumu em sectors, echo = FALSE}	
-
-RIKEN_df_cumuCO2sectors$scenario <- factor(RIKEN_df_cumuCO2sectors$scenario, levels = c("Early Transition Pathway (Low Lock-In)","Status Quo Lock-In", "Extended Fossil Dependence", "Prolonged Fossil-Steel Lock-In"))
-RIKEN_df_cumuCO2sectorsglobal$scenario <- factor(RIKEN_df_cumuCO2sectorsglobal$scenario, levels = c("Early Transition Pathway (Low Lock-In)","Status Quo Lock-In", "Extended Fossil Dependence", "Prolonged Fossil-Steel Lock-In"))
-
-stacked_bar_plot <- ggplot(RIKEN_df_cumuCO2sectorsglobal, aes(x = scenario, y = cumu_CO2, fill = variable)) +
-  geom_bar(stat = "identity", width = 0.6) +
-  #scale_fill_viridis_d(option = "plasma", end = 0.9) +
-  scale_fill_manual(values = c("Steel" = "#E68F00",
-                              "Cement" = "#cdcccc",
-                              "Chemicals" = "#9e9d9d",
-                              "Other" = "#838282")) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
-  scale_y_continuous(
-    name = "Cumulative CO2 (Gt CO2)",
-    # sec.axis = sec_axis(~ . * 0.00045, name = "Temperature Increase (°C)")
-    sec.axis = sec_axis(~ ((. / 650)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
-  ) +
-  labs(title = "Cumulative CO2 emissions by scenario, for all industry subsectors",
-       x = "Scenario",
-       y = "Cumulative CO2 (Gt CO2)") +
-  theme_classic() +
-  guides(fill = guide_legend(title = "Industry subsectors"))+
-    theme(
-    text = element_text(size = 14),
-    axis.text.x = element_text(angle = 0, hjust = 0.5),
-    panel.grid.major = element_line(linetype = "dashed", color = "gray70")
-  )
-
-
-# # ##OPTION1
-# # Custom x-axis labels: Scenarios on a new line
-# custom_labels <- function(x) {
-#   x <- str_replace(x, "\\.", "\n")  # Replace "." with a new line (scenario below region)
-#   return(x)
-# }
-
-# wrap_labels <- function(x) {
-#   str_wrap(x, width = 25)  # Adjust width to fit multiple lines
-# }
-
-# RIKEN_df_cumuCO2sectors <- RIKEN_df_cumuCO2sectors %>%
-#   mutate(region = factor(region, levels = c("World", "CHA", "IND")),
-#          scenario = factor(scenario, levels = unique(scenario)))
-
-# #scne label for annotation
-# scenario_positions <- RIKEN_df_cumuCO2sectors %>%
-#   group_by(scenario) %>%
-#   summarize(mid_pos = mean(as.numeric(interaction(region, scenario))))  # Find mid x-position for each scenario
-
-
-# stacked_bar_plot <- ggplot(RIKEN_df_cumuCO2sectors, aes(x = interaction(region, scenario), y = cumu_CO2, fill = variable)) +
-#   geom_bar(stat = "identity", width = 0.6) +
-#   scale_fill_manual(values = c("Steel" = "#E68F00",
-#                                "Cement" = "grey70",  
-#                                "Chemicals" = "grey50",  
-#                                "Other" = "grey30")) +
-#   scale_x_discrete(labels = rep(c("Global", "China", "India"), length(unique(RIKEN_df_cumuCO2sectors$scenario)))) +  
-#   scale_y_continuous(
-#      name = "Cumulative CO2 (Gt CO2)",
-# #     # sec.axis = sec_axis(~ . * 0.00045, name = "Temperature Increase (°C)")
-#      sec.axis = sec_axis(~ ((. / 650)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
-#    ) +
-#   labs(title = "Cumulative CO2 Emissions from 2020-2070",
-#        x = element_blank(),
-#        y = "Cumulative CO2 (Gt CO2)") +
-#   theme_classic() +
-#   guides(fill = guide_legend(title = "Industry subsectors")) +
-#   theme(
-#     text = element_text(size = 14),
-#     legend.position = "top",
-#     axis.text.x = element_text(angle = 0, hjust = 0.5),  # Keep labels readable
-#     panel.grid.major = element_line(linetype = "dashed", color = "gray70"),
-#     plot.margin = margin(20, 10, 50, 10)
-#   ) +
-#   # annotate("text", 
-#   #          x = scenario_positions$mid_pos, 
-#   #          y = -max(RIKEN_df_cumuCO2sectors$cumu_CO2) * 0.5,  # Lower annotation further
-#   #          label = wrap_labels(scenario_positions$scenario), 
-#   #          size = 4, fontface = "bold")+
-#   coord_cartesian(clip = "off")
-   
-# for (i in seq_along(scenario_positions$scenario)) {
-#   stacked_bar_plot <- stacked_bar_plot +
-#     annotation_custom(
-#       grob = textGrob(wrap_labels(scenario_positions$scenario[i]), 
-#                       gp = gpar(fontsize = 10, fontface = "bold")),
-#       xmin = scenario_positions$mid_pos[i] - 0.1,
-#       xmax = scenario_positions$mid_pos[i] + 0.1,
-#       ymin = -max(RIKEN_df_cumuCO2sectors$cumu_CO2) * 0.35,
-#       ymax = -max(RIKEN_df_cumuCO2sectors$cumu_CO2) * 0.35
-#      ) #+
-#     # geom_segment(
-#     #   aes(x = scenario_positions$mid_pos[i] - 1, xend = scenario_positions$mid_pos[i] + 1,
-#     #       y = -max(RIKEN_df_cumuCO2sectors$cumu_CO2) * 0.8, yend = -max(RIKEN_df_cumuCO2sectors$cumu_CO2) * 0.8),
-#     #   color = "black", size = 0.5
-#     # )
-# }
-
-print(stacked_bar_plot)
-#ggsave("C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/AnalysisScript/RIKEN/RIKEN_cumuindustrysubsectors.png")#, width = 10, height = 6, units = "in", dpi = 300)
 ```
