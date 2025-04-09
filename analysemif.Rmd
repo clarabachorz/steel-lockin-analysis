@@ -9,7 +9,8 @@ require(ggplot2)
 require(tidyverse)
 require(mrremind)
 require(magclass)
-require(quitte)
+require("quitte")
+
 library("quitte")
 library(dplyr)
 library(gridExtra)
@@ -128,7 +129,21 @@ lockin_df <- lockin_list %>%
 h2_share <- prsteel_df %>%
   group_by(period, scenario) %>%
   summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
-  mutate(h2_share = h2_share*100) #to percent 
+  mutate(h2_share = h2_share*100) #to percent
+
+h2_all_steel_shares <- prsteel_df %>%
+  group_by(period, scenario) %>%
+  summarise(
+    h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value),
+    scrap_eaf_share = sum(value[variable == "SCRAP-EAF"]) / sum(value),
+    coal_based_share = sum(value[variable %in% c("BF-BOF", "BF-BOF-CCS")]) / sum(value)
+  ) %>%
+  mutate(
+    h2_share = h2_share * 100,
+    scrap_eaf_share = scrap_eaf_share * 100,
+    coal_based_share = coal_based_share * 100
+  )
+
 
 h2_share_lockin <- lockin_df %>%
   group_by(period, scenario) %>%
@@ -156,10 +171,36 @@ all_steel_shares <- ccsscen_df %>%
     ng_share = sum(value[variable == "DRI-NG-EAF"], na.rm = TRUE) / total_production
   )
 
-head(all_steel_shares)
-
 
 ```
+
+```{r calc cumu em}
+calc_cumuem <- function(df) {
+  df %>%
+    filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
+                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
+                 variable,
+                 ignore.case = TRUE, 
+                 fixed = TRUE)) %>%
+    # filter(between(period, 2025, 2070),
+    filter(between(period, 2025, 2100),
+           region == "World") %>%
+    select(-model, -region) %>%
+    #add up the different components: solid, liquids ..
+    group_by(period, scenario) %>%
+    summarise(total_CO2_yearly = sum(value, na.rm = TRUE),
+          total_CO2_5year = total_CO2_yearly * 5) %>%
+    ungroup() %>%
+    group_by(scenario) %>%
+    mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
+    summarise(cumu_CO2 = max(cumu_CO2))
+}
+
+ccsscen_emi_df <- ccs_list %>%
+  map_dfr(calc_cumuem) 
+
+```
+
 
 ```{r plot h2 share, echo = FALSE}
 
@@ -190,9 +231,47 @@ ggplot(h2_share_plot, aes(x = period, y = h2_share, color = scenario)) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 
 #save
-#ggsave("h2_share.png", width = 8, height = 5, dpi = 300)
+# ggsave("figs/h2_share.png", width = 8, height = 5, dpi = 300)
 ```
 
+```{r plot h2 scen all steel shares, echo = FALSE}
+
+h2_all_steel_shares_long <- h2_all_steel_shares %>%
+  pivot_longer(
+    cols = c("h2_share", "scrap_eaf_share", "coal_based_share"),
+    names_to = "steel_type",
+    values_to = "share"
+  )
+
+h2_all_steel_shares_long <- h2_all_steel_shares_long %>%
+  mutate(steel_type = recode(steel_type,
+                             h2_share = "Hydrogen-based steel\n(DRI-H2-EAF)",
+                             scrap_eaf_share = "Secondary steel\n(Scrap EAF)",
+                             coal_based_share = "Coal-based steel production\n(BF-BOF-CCS + BF-BOF)"))
+
+ggplot(h2_all_steel_shares_long, aes(x = period, y = share, color = scenario)) +
+  geom_line(size = 0.6, alpha = 0.8) +
+  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(
+    title = "Steel production shares by production route",
+    x = "Time",
+    y = "Share (%)",
+    color = "Scenario"
+  ) +
+  scale_color_manual(values = c("#0d55c9", "#22cdbc", "#8586bc", "#3d3d3f", "#8d8d92", "#41415d")) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  ) +
+  guides(color = guide_legend(nrow = 1, byrow = TRUE)) +
+  facet_wrap(~ steel_type)
+
+#save
+# ggsave("figs/h2scenarios_all_steel_shares.png", width = 8, height = 5, dpi = 300)
+```
 ```{r plot h2 share lockin scen, echo = FALSE}
 
 # h2_share_plot <- h2_share_lockin
@@ -222,34 +301,102 @@ ggplot(h2_share_lockin, aes(x = period, y = h2_share, color = scenario)) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 
 #save
-# ggsave("h2_share_lockin.png", width = 8, height = 5, dpi = 300)
+# ggsave("figs/h2_share_lockin.png", width = 8, height = 5, dpi = 300)
 ```
 
-```{r plot h2 dri, echo = FALSE}
 
-#factors for scenarios
-# h2_dri$scenario <- factor(h2_dri$scenario, levels = c("Base H2 cost", "High H2 cost", "Very high H2 cost", "More CCS injection capacity", "More CCS injection capacity +\nearly retirement of BF-BOF-CCS"))
+```{r plot ccs cumu emi}
+# Copy the data
+ccsscen_emi_df_plot <- ccsscen_emi_df
 
+# Rename "Base H2 cost" to "Base CCS assumption"
+ccsscen_emi_df_plot$scenario <- gsub("Base H2 cost", "Base CCS assumption", ccsscen_emi_df_plot$scenario)
 
+# Get unique scenario names
+unique_scenarios <- unique(ccsscen_emi_df_plot$scenario)
 
-ggplot(h2_dri, aes(x = period, y = value, color = scenario)) +
-  geom_line(size = 0.6, alpha = 0.8) +
-  geom_point(size = 2, shape = 21, fill = "white", stroke = 0.8) +
-  labs(title = "DRI-H2-EAF steel production",
-       x = "Time",
-       y = "Steel production (Mt/yr)",
-       color = "Scenario") +
-  # scale_color_viridis_d(option = "C") +
-  scale_color_manual(values = c("#0d55c9", "#22cdbc", "#8586bc", "#3d3d3f", "#41415d")) +
-  theme_minimal(base_size = 14) +
+# Convert to factor
+ccsscen_emi_df_plot$scenario <- factor(ccsscen_emi_df_plot$scenario, levels = unique_scenarios)
+
+# Define colors
+custom_colors <- c(
+  "Base CCS assumption" = "#8A704E",
+  "More CCS injection capacity" = "#b09105",
+  "Early retirement of BF-BOF-CCS" = "#bf6e12",
+  "More CCS injection capacity +\nearly retirement of BF-BOF-CCS" = "#e6c90e"
+)
+
+# Compute percentage difference
+base_value <- ccsscen_emi_df_plot %>%
+  filter(scenario == "Base CCS assumption") %>%
+  pull(cumu_CO2) / 1e3  # Convert to same units
+
+ccsscen_emi_df_plot <- ccsscen_emi_df_plot %>%
+  mutate(percentage_diff = ifelse(scenario == "Base CCS assumption", 
+                                  NA, 
+                                  ((cumu_CO2 / 1e3 - base_value) / base_value) * 100))
+
+# Find x-coordinates of bars
+x_base <- which(levels(ccsscen_emi_df_plot$scenario) == "Base CCS assumption")
+x_others <- which(levels(ccsscen_emi_df_plot$scenario) != "Base CCS assumption")
+
+# Find y-coordinates for arrows
+y_base <- base_value + 30  # Slightly above base bar
+y_others <- ccsscen_emi_df_plot$cumu_CO2[ccsscen_emi_df_plot$scenario != "Base CCS assumption"] / 1e3 + 30
+
+# Plot
+ggplot(ccsscen_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scenario)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  scale_fill_manual(values = custom_colors) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
+  labs(
+    title = "Cumulative CO2 Emissions (2025-2070)\nfrom steel production, by scenario",
+    x = "Scenario",
+    y = "Cumulative CO2 (Gt CO2)"
+  ) +
+  theme_classic() +
+  guides(fill = "none") +
+  scale_y_continuous(
+    name = "Cumulative CO2 (Gt CO2)",
+    sec.axis = sec_axis(~ ((. / 235)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
+  ) +
   theme(
-    legend.position = "bottom",
-    legend.title = element_text(size = 12, face = "bold"),
-    legend.text = element_text(size = 11),
-    plot.title = element_text(face = "bold", hjust = 0.5),
-    axis.title = element_text(face = "bold")
-  )+
-  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+    text = element_text(size = 10),
+    title = element_text(size = 12),
+    axis.title = element_text(size = 11),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major = element_line(linetype = "dashed", color = "gray70")
+  ) +
+  # Add arrows from Base CCS assumption to other bars
+  geom_segment(aes(x = x_base, xend = x_base, y = base_value, yend = y_base), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_base, xend = x_others[3], y = y_base, yend = y_base), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[1], xend = x_others[1], y = y_base, yend = y_others[1]-30),
+               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[2], xend = x_others[2], y = y_base, yend = y_others[2]-30),
+               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[3], xend = x_others[3], y = y_base, yend = y_others[3]-30),
+               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+
+  # Add white circles behind percentage difference labels
+  geom_point(aes(x = x_base*2, y = (y_base) / 2 + 35),
+             shape = 21, fill = "white", color = "#7e7e7e", size = 15) +
+  geom_point(aes(x = x_base*3, y = (y_base) / 2 + 35),
+             shape = 21, fill = "white", color = "#7e7e7e", size = 15) +
+  geom_point(aes(x = x_base*4, y = (y_base) / 2 + 30),
+             shape = 21, fill = "white", color = "#7e7e7e", size = 15) +
+  # Add percentage difference labels above arrows
+  annotate("text", x = (x_base*2), y = (y_base) / 2 + 35,
+           label = paste0(round(ccsscen_emi_df_plot$percentage_diff[2], 1), "%"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base *3), y = y_base/ 2 + 35,
+           label = paste0(round(ccsscen_emi_df_plot$percentage_diff[3], 1), "%"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base *4), y = (y_base ) / 2 +30,
+           label = paste0(round(ccsscen_emi_df_plot$percentage_diff[4], 1), "%"), size = 3, fontface = "bold", color = "#7e7e7e")
+
+#save
+# ggsave("figs/cumu_emi_ccs_scen.png", width = 8, height = 5, dpi = 300)
 
 ```
 
@@ -287,7 +434,7 @@ ggplot(ccs_share_glob, aes(x = period, y = ccs_share, color = scenario)) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 
 #save
-# ggsave("ccs_share_global.png", width = 8, height = 5, dpi = 300)
+# ggsave("figs/ccs_share_global.png", width = 8, height = 5, dpi = 300)
 ```
 
 ```{r plot ccs share, echo = FALSE}
@@ -357,7 +504,7 @@ ggplot(ccs_share_CHA, aes(x = period, y = ccs_share, color = scenario)) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 
 #save
-# ggsave("ccs_share_oas.png", width = 8, height = 5, dpi = 300)
+# ggsave("figs/ccs_share_oas.png", width = 8, height = 5, dpi = 300)
 ```
 
 ```{r plot ccs area plots, echo = FALSE}
@@ -368,6 +515,8 @@ plot_df <- all_steel_shares %>%
   pivot_longer(cols = ends_with("_share"), 
                names_to = "steel_route", 
                values_to = "share")  # Convert to long format for ggplot
+
+plot_df$scenario <- gsub("Base H2 cost", "Base CCS assumption", plot_df$scenario)
 
 # Improve steel_route labels
 plot_df$steel_route <- recode(plot_df$steel_route,
@@ -384,21 +533,6 @@ plot_df$steel_route <- factor(plot_df$steel_route,
 
 color_mapping <- setNames(plot_df$color, plot_df$steel_route)
 
-# Plot
-ggplot(plot_df, aes(x = period, y = share, fill = steel_route)) +
-  geom_area(alpha = 0.7) +  # Stacked area plot
-  scale_fill_manual(values = color_mapping) +
-  labs(title = "Steel Production Share by Route",
-       x = "Year",
-       y = "Share (%)",
-       fill = "Steel Route") +
-  facet_wrap(~scenario) +  # Separate plots for each scenario
-  scale_y_continuous(labels = scales::percent_format()) +  # Show % format
-  theme_minimal() +
-  theme(legend.position = "bottom")
-
-
-
 # COMBINED PLOT
 
 
@@ -412,6 +546,13 @@ plot_df <- plot_df %>%
 #COMBINE area plots
 unique_scenarios <- unique(plot_df$scenario)
 
+custom_linetypes <- c(
+  "solid" = "solid",
+  "dashed" = "44",
+  "dotted" = "11",
+  "dotdash" = "331331"
+)
+
 # Plot
 ggplot() +
   geom_area(data = plot_df %>% filter(scenario == unique_scenarios[1]),
@@ -423,54 +564,42 @@ ggplot() +
   geom_area(data = plot_df %>% filter(scenario == unique_scenarios[4]),
             aes(x = period, y = share, fill = steel_route), alpha = 0.25) +
   scale_fill_manual(values = color_mapping) +
-  labs(title = "Steel Production Share by Route",
+  labs(title = "Primary steel production share by pathway, for four CCS scenarios",
        x = "Year",
-       y = "Share (%)",
-       fill = "Steel Route") +
-  scale_y_continuous(labels = scales::percent_format()) +  # Show % format
-  theme_minimal() +
+       y = "Share",
+       fill = "Production pathway") +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0)) +
   # Overlay lines showing combined BF-BOF + BF-BOF CCS share with scenario-dependent linetype
   # geom_line(data = plot_df,
   #           aes(x = period, y = combined_bf_bof_share, group = scenario, color = scenario, linetype = scenario),
   #           size = 1.2) +
   # # Overlay lines showing BF-BOF share with scenario-dependent linetype
   geom_line(data = plot_df %>% filter(steel_route == "BF-BOF"),
-            aes(x = period, y = share, group = scenario, color = scenario, linetype = scenario),
+            aes(x = period, y = share, group = scenario, linetype = scenario), #used to have  color = scenario,
+            color = "#eadede",
             size = 1.2) +
-  # Add a legend for the lines
-  #color only white
   #scale_color_manual(name = "Scenario", values = setNames(c("#010101", "#ff6200", "#cb0ece", "#ffffff"), unique_scenarios)) +
-  scale_linetype_manual(name = "Scenario", values = setNames(c("solid", "dashed", "dotted", "dotdash"), unique_scenarios)) +
-  guides(linetype = guide_legend(title = "Line Type"),
-        )
-
-```
-```{r plot primary steel, echo = FALSE}	
-
-# # Reorder levels of 'variable' factor
-plot_df$variable <- factor(plot_df$variable,levels = c(
-  "DRI-NG-EAF-CCS",
-  "DRI-NG-EAF",
-  "DRI-H2-EAF",
-  "BF-BOF-CCS",
-  "BF-BOF"))
-
-plot_df <- plot_df %>%
-  mutate(color = steel_route$color[match(variable, steel_route$route)])
-
-color_mapping <- setNames(steel_route$color[match(levels(plot_df$variable), steel_route$route)], 
-                        levels(plot_df$variable))
-
-# Steel production Plot:
-# TODO: separate primary and secondary steel somehow
-ggplot(plot_df, aes(x = period)) +
-  geom_area(aes(y = value, fill = variable), alpha = 0.5) +
-  scale_fill_manual(values = color_mapping) +
-  labs(title = "Primary Steel production by technology type",
-       x = "Time",
-       y = "Primary Steel Production (Mt/yr)") +
-  theme_minimal()
-
-#Plot steel CO2 emissions intensity + share of secondary steel in total mix on the same graph (different y axes?)
-
+  # scale_linetype_manual(name = "Scenario", values = setNames(c("solid", "dashed", "dotted", "dotdash"), unique_scenarios)) +
+  scale_linetype_manual(name = "Scenario", values = setNames(custom_linetypes, unique_scenarios)) +
+  guides(
+    linetype = guide_legend(
+      title = "Line Type",
+      override.aes = list(size = 1)
+    )
+  ) +
+  theme(
+    # legend.background = element_rect(fill = "#a4a0a0", color = "white"),
+    legend.key = element_rect(fill = "#b5b1b1", color = "white"),
+    legend.key.size = unit(30, "points"),
+    legend.spacing.x = unit(40, "points"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    axis.title.x = element_text(size = 13),
+    axis.title.y = element_text(size = 13),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 14),
+    )
+#save
+# ggsave("figs/areaplot_shares_ccs.png", width = 8, height = 5, dpi = 300)
 ```

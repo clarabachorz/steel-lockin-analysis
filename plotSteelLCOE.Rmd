@@ -21,7 +21,7 @@ library(stringr)
 
 ```{r load, echo = FALSE}
 #LOAD GDX
-max_lockin <- "<...>.gdx"
+max_lockin <- "inputdata/gdx/<...>.gdx"
 
 ```
 
