@@ -252,7 +252,7 @@ p <- ggplot(data_long_filtered_em, aes(x = factor(index), y = Emissions, fill = 
                               "Total_net_existing_BOF_capacity" = "#454444"
                               ),
                     labels = c(
-                              "Additional_cumulative_capacity_to_meet_gov_target" = "Additional capacity if government\ntargets are met only with BF-BOFs",
+                              "Additional_cumulative_capacity_to_meet_gov_target" = "Additional capacity if 2030 government\ntargets are met only with BF-BOFs",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction" = "New BF-BOF project\n(under construction)",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only" = "New BF-BOF project\n(announced)",
                               "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity, assuming\none BF relining (lifetime of 35 years)",
@@ -274,7 +274,7 @@ p <- p +
       "Cumu_oldBOF_1relining" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if one\nBF relining takes place",
       "Cumu_oldBOF_andnew" = "Cumulative CO2 emissions from 2025,\nfrom operating, under construction and\nannounced BF-BOFs, if one BF relining\ntakes place",
       "Cumu_oldBOF" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025",
-      "Cumu_oldBOF_new_govtargets" = "Cumulative CO2 emissions from 2025,\nfrom all BF-BOFs, if additional capacity\nis added to meet government targets"
+      "Cumu_oldBOF_new_govtargets" = "Cumulative CO2 emissions from 2025,\nfrom all BF-BOFs, if additional capacity\nis added to meet 2030 government\ntargets"
     )
   ) +
     scale_y_continuous( limits = c(0, 3000),
@@ -338,13 +338,13 @@ p <- p +
            label = "Add planned\nand under\nconstruction\nBF-BOFs", hjust = 1.2,vjust = 0.4,
             lineheight = 0.9, size = 3.2) +
   
-  annotate("text", x = "2069", y = (max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) + 
+  annotate("text", x = "2069", y = (max(data_long_em_cmu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) + 
                                 max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_new_govtargets"])) / (2 * scale_factor),
-            label = "If government\ntargets are reached\nusing new BF-BOFs",
+            label = "If 2030\ngovernment targets\nare reached\nusing new BF-BOFs",
             hjust = 1.05, vjust = 0.6,
             lineheight = 0.9, size = 3.2)
 p
-# ggsave("figs/BOF_emissions_plot_1relinings.png", width = 11, height = 8, dpi = 300)
+ggsave("figs/BOF_emissions_plot_1relinings.png", width = 11, height = 8, dpi = 300)
 ```
 
 
