@@ -344,7 +344,7 @@ p <- p +
             hjust = 1.17, vjust = 0.7,
             lineheight = 0.9, size = 3.2)
 p
-ggsave("figs/BOF_emissions_plot_1relinings.png", width = 11, height = 8, dpi = 300)
+#ggsave("figs/BOF_emissions_plot_1relinings.png", width = 11, height = 8, dpi = 300)
 ```
 
 
@@ -380,6 +380,7 @@ data_long_filtered_em <- data_long %>%
 #take wide format to calculate cumulative caps
 data_wide_em <- data_long_filtered_em %>%
   select(-Capacity) %>%
+  filter(index >= 2025 & index <2081) %>%
   pivot_wider(names_from = Category, values_from = Emissions)
 
 #clean df
@@ -435,7 +436,7 @@ data_long_filtered_em$Category <- factor(data_long_filtered_em$Category,
                               "Additional_net_BOF_capacity_operating_2_relining",
                               "Total_net_existing_BOF_capacity"))
 
-p <- ggplot(data_long_filtered_em, aes(x = factor(index), y = Emissions, fill = Category)) +
+p1 <- ggplot(data_long_filtered_em, aes(x = factor(index), y = Emissions, fill = Category)) +
   geom_bar(stat = "identity", data = data_long_filtered_em) +
   scale_fill_manual(values = c("Additional_cumulative_capacity_to_meet_gov_target" = "#8420f0",
                               "Total_net_BOF_capacity_additions_new_projects_2_relining_under_construction" = "#e41c7d",
@@ -446,15 +447,15 @@ p <- ggplot(data_long_filtered_em, aes(x = factor(index), y = Emissions, fill = 
                     labels = c("Additional_cumulative_capacity_to_meet_gov_target" = "Additional capacity if government\ntargets are met only with BF-BOFs",
                               "Total_net_BOF_capacity_additions_new_projects_2_relining_under_construction" = "New BF-BOF project\n(under construction)",
                               "Total_net_BOF_capacity_additions_new_projects_2_relining_announced_only" = "New BF-BOF project\n(announced)",
-                              "Additional_net_BOF_capacity_operating_2_relining" = "Operating BF-BOF capacity, assuming\ntwo BF relinings (minimum lifetime of\n54 years).",
+                              "Additional_net_BOF_capacity_operating_2_relining" = "Operating BF-BOF capacity, assuming\ntwo BF relinings (minimum lifetime of\n45 years).",
                               "Total_net_existing_BOF_capacity" = "Operating BF-BOF capacity, assuming\nplants undergo no BF relinings\nafter 2025."))+
   labs(x = "Time period", y = "Global yearly emissions from BF-BOF steel-making (MtCO2/yr)", fill = "Bar Legend", color = "Line Legend") +
   scale_x_discrete(breaks = x_breaks)
   
 
-scale_factor <- 40
+scale_factor <- 30
 
-p <- p + 
+p1 <- p1 + 
   geom_line(data = data_long_em_cumu_simple, aes(x = factor(index), y = Emissions / scale_factor, group = LineCategory, color = LineCategory), linewidth = 1.3) +#, color = "black", linetype = "dashed") #+
   scale_color_manual(
     values = c(
@@ -464,7 +465,7 @@ p <- p +
       "Cumu_additionalGovtargets" = "#8420f0"
     ),
     labels = c(
-      "Cumu_oldBOF" = "Cumulative CO2 emissions from 2020,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025",
+      "Cumu_oldBOF" = "Cumulative CO2 emissions,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025",
       "Cumu_oldBOF_2relining" = "Cumulative CO2 emissions,\nfrom operating BF-BOFs, if two BF\nrelinings take place",
       "Cumu_oldBOF_andnew_2relining" = "Cumulative CO2 emissions,\nfrom operating, under construction and\nannounced BF-BOFs, if two BF\nrelinings take place",
       "Cumu_additionalGovtargets" = "Cumulative CO2 emissions,\nfrom all BF-BOFs, if additional capacity\nis added to meet government targets"
@@ -501,7 +502,7 @@ p <- p +
     )
 
 #add annotations and arrows
-p <- p +
+p1 <- p1 +
   geom_segment(aes(
     x = "2079", xend = "2079",
     y = max(data_long_em_cumu_simple$Emissions[data_long_em_cumu_simple$Category == "Cumu_oldBOF_2relining"]) / scale_factor, 
@@ -526,20 +527,25 @@ p <- p +
   annotate("text", x = "2080",
           y = (max(data_long_em_cumu_simple$Emissions[data_long_em_cumu_simple$Category == "Cumu_additionalGovtargets"]) + 
                max(data_long_em_cumu_simple$Emissions[data_long_em_cumu_simple$Category == "Cumu_oldBOF_andnew_2relining"])) / (2 * scale_factor), 
-          label = str_wrap("If government targets are reached using new BF-BOFs", width = 20),
+          label = str_wrap("If 2030 government targets are reached using new BF-BOFs", width = 20),
           hjust = 1.25, vjust = 0.6,
            lineheight = 0.9, size = 3.5) +
   annotate("text", x = "2079",
           y = (max(data_long_em_cumu_simple$Emissions[data_long_em_cumu_simple$Category == "Cumu_oldBOF_2relining"]) + 
               max(data_long_em_cumu_simple$Emissions[data_long_em_cumu_simple$Category == "Cumu_oldBOF"])) / (2 * scale_factor), 
-           label = str_wrap("Effect of two BF relinings leading to a plant lifetime of 54 years", width = 16),
+           label = str_wrap("Effect of two BF relinings leading to a plant lifetime of 45 years", width = 16),
            hjust = 1.2, vjust = 0.4,
            lineheight = 0.9, size = 3.5)
-p
+p1
 # ggsave("figs/BOF_emissions_plot_2relinings.png", width = 11, height = 8, dpi = 300)
 ```
 
+```{r combine 1 and 2 relining plots}
 
+grid.arrange(p, p1, ncol = 1, nrow = 2)
+g <- arrangeGrob(p, p1, ncol = 1, nrow = 2)
+ggsave("figs_temp/BOF_combine_relinings.png",g, width = 11, height = 12, dpi = 300)
+```
 ```{r plot age distribution, regions}
 
 grouping =  5#years

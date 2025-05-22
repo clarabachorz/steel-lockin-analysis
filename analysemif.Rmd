@@ -19,7 +19,7 @@ library(purrr)
 ```
 
 ```{r load data}
-mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoRetiReliningGovTarget-PkBudg650.mif")
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg650.mif")
 mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-1-PkBudg650.mif")
 mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-2-PkBudg650.mif")
 
@@ -28,9 +28,9 @@ mifdata5 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreBFCCS-P
 mifdata6 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS_BFCCSEarlyReti-PkBudg650.mif")
 
 #other lock in scenarios
-mifdata7 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBound-PkBudg650.mif")
-mifdata8 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoReti-PkBudg650.mif")
-mifdata9 <- read.quitte("inputdata/mif/REMIND_generic_SteelCapBoundNoRetiRelining-PkBudg650.mif")
+mifdata7 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg650.mif")
+mifdata8 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg1000.mif")
+mifdata9 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg1000.mif")
 
 mifdata1 <- mifdata1 %>%
   mutate(scenario = "Base H2 cost")
@@ -52,13 +52,17 @@ mifdata6 <- mifdata6 %>%
   mutate(scenario = "More CCS injection capacity +\nearly retirement of BF-BOF-CCS")
 
 mifdata7 <- mifdata7 %>%
-  mutate(scenario = "Early Transition")
+  mutate(scenario = "Green Policy (1.5C)")
 
 mifdata8 <- mifdata8 %>%
-  mutate(scenario = "Base Transition")
+  mutate(scenario = "Base scenario (WB2C)")
 
 mifdata9 <- mifdata9 %>%
-  mutate(scenario = "Extended Lifetime Transition")
+  mutate(scenario = "Green Policy (WB2C)")
+
+mifdata10 <- mifdata1 %>%
+  mutate(scenario = "Base scenario (1.5C)")
+
 
 ```
 
@@ -68,21 +72,22 @@ fs = 10 # font size
 
 steel_route <- tribble(
   ~route,          ~route_name, ~color,
-  "BF-BOF",         "BF-BOF",    "#080808",
-  "BF-BOF-CCS",     "BF-BOF CCS",    "#a0a0a0",
   "DRI-NG-EAF-CCS", "DRI-EAF NG CCS",    "#8fd1af",
   "DRI-NG-EAF",     "DRI-EAF NG",    "#06b429",
   "DRI-H2-EAF",     "DRI-EAF H2",    "#17cff0",
-  "SCRAP-EAF",        "Scrap EAF",   "#fbfb0d",
+    "BF-BOF-CCS",     "BF-BOF CCS",    "#a0a0a0",
+  "BF-BOF",         "BF-BOF",    "#080808",
+  "SCRAP-EAF",        "Scrap EAF",   "#fbd30d",
 )
 ```
 
 ```{r change data, echo = FALSE}
 
-mifdata_list <- list(mifdata1, mifdata2, mifdata3)
+base_list <- list(mifdata7, mifdata8, mifdata9, mifdata10)
+h2_list <- list(mifdata1, mifdata2, mifdata3)
 ccs_list <- list(mifdata1, mifdata4, mifdata5, mifdata6)
 
-lockin_list <- list(mifdata1,mifdata7, mifdata8, mifdata9)
+lockin_list <- list(mifdata10, mifdata7, mifdata8, mifdata9)
 
 #filter breakdown of steel production
 process_data <- function(df) {
@@ -116,7 +121,10 @@ process_data_lockin <- function(df) {
 }
 
 #get full df
-prsteel_df <- mifdata_list %>%
+prsteel_df <- h2_list %>%
+  map_dfr(process_data)
+
+mainscens_df <- base_list %>%
   map_dfr(process_data)
 
 ccsscen_df <- ccs_list %>%
@@ -174,6 +182,100 @@ all_steel_shares <- ccsscen_df %>%
 
 ```
 
+```{r plot global barplots}
+
+target_labels <- list(
+  "1.5C" = "Steel sector transition for a 1.5°C target (with overshoot)",
+  "WB2C" = "Steel sector transition for a well below 2°C target"
+)
+
+target_labeller = function(variable, value) {
+  return(target_labels[value])
+}
+
+route_colors <- setNames(steel_route$color, steel_route$route)
+
+mainscens_df_plot <- mainscens_df %>%
+  filter(period %in% c(2020,2025, 2030, 2035, 2040, 2045, 2050, 2055,2060)) %>%
+  # filter(grepl("1.5C", scenario, ignore.case = TRUE, fixed = TRUE)) %>%
+  mutate(
+    target = str_extract(scenario, "1\\.5C|WB2C"),
+    scenario_clean = gsub("\\(1\\.5C\\)|\\(WB2C\\)", "", scenario),
+    period_scenario = paste(period, scenario_clean)
+    ) %>%
+  arrange(period, scenario) %>%
+  mutate(
+  period_scenario = factor(period_scenario, levels = unique(period_scenario)),
+  target = factor(target, levels = c("1.5C", "WB2C"))
+  )
+
+
+scenario_x_offsets <- mainscens_df_plot %>%
+  distinct(scenario_clean) %>%
+  arrange(scenario_clean) %>%
+  mutate(offset = seq(-0.8,0.8,length.out = n()))
+
+mainscens_df_plot <- mainscens_df_plot %>%
+  left_join(scenario_x_offsets, by = "scenario_clean") %>%
+  mutate(xpos = as.numeric(period) + offset)
+
+# custom x labels
+xlabels_df <- mainscens_df_plot %>%
+  distinct(xpos, scenario_clean)
+
+#dates
+dates_df <- mainscens_df_plot %>%
+  filter(target == "WB2C") %>%
+  group_by(period,target) %>%
+  summarise(x= mean(xpos)) %>%
+  mutate(
+    grob = lapply(period, function(lbl){
+      textGrob(lbl, gp = gpar(fontsize = fs+2, fontface = "bold"))
+    }),
+    xmin = x - 1.9,
+    xmax = x + 0.5,
+    ymin = -960,
+    ymax = -960,
+  )
+
+# ggplot(mainscens_df_plot, aes(x=period_scenario, y = value, fill = variable)) +
+p <- ggplot(mainscens_df_plot, aes(x = xpos, y = value, fill = variable)) +
+  geom_bar(
+    stat = "identity",
+    ) +
+  scale_fill_manual(values = route_colors) +
+  facet_wrap(~target, ncol = 1, labeller = target_labeller) +
+  scale_x_continuous(
+    breaks = xlabels_df$xpos,
+    labels = xlabels_df$scenario_clean,
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = "Scenario and period",
+    y = "Steel production (Mt/yr)",
+    fill = "Production route") +
+  theme_bw(base_size = fs+5) +
+  theme(
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    plot.margin = margin(10, 10, 30, 10),
+    axis.title.x = element_text(margin = margin(t = 25)),
+    strip.text = element_text(size = fs+3, face = "bold"),
+  ) +
+  coord_cartesian(clip = "off")
+
+for (i in seq_len(nrow(dates_df))) {
+  p <- p + annotation_custom(
+    dates_df$grob[[i]],
+    xmin = dates_df$xmin[i],
+    xmax = dates_df$xmax[i],
+    ymin = dates_df$ymin[i],
+    ymax = dates_df$ymax[i]
+  )
+}
+p
+ggsave("figs_temp/steel_production_scenarios.png", width = 12, height = 10, dpi = 300)
+```
+
 ```{r calc cumu em}
 calc_cumuem <- function(df) {
   df %>%
@@ -183,7 +285,7 @@ calc_cumuem <- function(df) {
                  ignore.case = TRUE, 
                  fixed = TRUE)) %>%
     # filter(between(period, 2025, 2070),
-    filter(between(period, 2025, 2100),
+    filter(between(period, 2025, 2070),
            region == "World") %>%
     select(-model, -region) %>%
     #add up the different components: solid, liquids ..
@@ -198,6 +300,9 @@ calc_cumuem <- function(df) {
 
 ccsscen_emi_df <- ccs_list %>%
   map_dfr(calc_cumuem) 
+
+mainscens_df_emi <- base_list %>%
+  map_dfr(calc_cumuem)
 
 ```
 
@@ -290,7 +395,8 @@ ggplot(h2_share_lockin, aes(x = period, y = h2_share, color = scenario)) +
        y = "DRI-H2-EAF share (%)",
        color = "Scenario") +
   # scale_color_viridis_d(option = "C") +
-  scale_color_manual(values = c("#7BADAE", "#6E8980", "#757A67", "#8A704E")) +
+  # scale_color_manual(values = c("#d7a614", "#bb5700", "#3fa60e", "#1a7213")) +
+  scale_color_manual(values = c("#88CCEE", "#FDB863", "#0072B2", "#D55E00")) +
   theme(
     legend.position = "bottom",
     legend.title = element_text(size = 12, face = "bold"),
@@ -301,7 +407,7 @@ ggplot(h2_share_lockin, aes(x = period, y = h2_share, color = scenario)) +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 
 #save
-# ggsave("figs/h2_share_lockin.png", width = 8, height = 5, dpi = 300)
+ggsave("figs_temp/h2_share_lockin.png", width = 8, height = 5, dpi = 300)
 ```
 
 
@@ -397,6 +503,95 @@ ggplot(ccsscen_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scenari
 
 #save
 # ggsave("figs/cumu_emi_ccs_scen.png", width = 8, height = 5, dpi = 300)
+
+```
+
+```{r plot base cumu emi}
+# Copy the data
+mainscens_emi_df_plot <- mainscens_df_emi
+
+# Get unique scenario names
+unique_scenarios <- unique(mainscens_emi_df_plot$scenario)
+unique_scenarios <- c("Base scenario (1.5C)", 
+                      "Green Policy (1.5C)",
+                      "Base scenario (WB2C)",
+                      "Green Policy (WB2C)")
+
+# Convert to factor
+mainscens_emi_df_plot$scenario <- factor(mainscens_emi_df_plot$scenario, levels = unique_scenarios)
+
+
+# find x-coordinates of bars
+x_base <- which(levels(mainscens_emi_df_plot$scenario) == "Base scenario (1.5C)")
+x_others <- which(levels(mainscens_emi_df_plot$scenario) != "Base scenario (1.5C)")
+
+
+y1 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Base scenario (1.5C)"] / 1e3
+y2 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Base scenario (WB2C)"] / 1e3
+
+
+emi_1p5diff <- y1- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (1.5C)"] / 1e3
+emi_wb2cdiff <- y2-mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (WB2C)"] / 1e3
+
+# find y-coordinates for arrows
+y_base <- y1 + 10  # slightly above base bar
+y_others <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario != "Base scenario (1.5C)"] / 1e3 + 30
+
+
+
+# Plot
+ggplot(mainscens_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scenario)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
+  # scale_fill_manual(values = c("#d7a614", "#3fa60e", "#bb5700", "#1a7213")) +
+  scale_fill_manual(values = c("#88CCEE", "#0072B2", "#FDB863", "#D55E00")) +
+  labs(
+    title = "Cumulative CO2 Emissions (2025-2070)\nfrom steel production, by scenario",
+    x = "Scenario",
+    y = "Cumulative CO2 (Gt CO2)"
+  ) +
+  theme_classic(base_size = fs+3) +
+  guides(fill = "none") +
+  scale_y_continuous(
+    name = "Cumulative CO2 (Gt CO2)",
+    sec.axis = sec_axis(~ ((. / 235)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
+  ) +
+  theme(
+    text = element_text(size = 10),
+    title = element_text(size = 12),
+    axis.title = element_text(size = 11),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major = element_line(linetype = "dashed", color = "gray70")
+  )+
+  # Add arrows from Base CCS assumption to other bars
+  geom_segment(aes(x = x_base, xend = x_base, y = y1, yend = y_base), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_base, xend = x_others[1], y = y_base, yend = y_base), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[2], xend = x_others[2], y = y2, yend = y2+10), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[2], xend = x_others[3], y = y2+10, yend = y2+10), 
+               color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[1], xend = x_others[1], y = y_base, yend = y_others[1]-30),
+               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+  geom_segment(aes(x = x_others[3], xend = x_others[3], y = y2+10, yend = y_others[3]-30),
+               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+
+  # Add white circles behind percentage difference labels
+  geom_point(aes(x = x_base*2, y = (y_base) / 2 + 15),
+             shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
+
+  geom_point(aes(x = x_base*4, y = (y_base) / 2 + 35),
+             shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
+  
+  annotate("text", x = (x_base*2), y = (y_base) / 2 + 15,
+           label = paste0("-", round(emi_1p5diff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base *4), y = (y_base ) / 2 +35,
+           label = paste0("-", round(emi_wb2cdiff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e")
+
+#save
+ggsave("figs_temp/cumu_emi_base_scen.png", width = 8, height = 5, dpi = 300)
 
 ```
 
