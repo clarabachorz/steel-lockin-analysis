@@ -1,0 +1,450 @@
+```{r setup, include = FALSE}
+path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/Analysis/"
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(
+    root.dir = path
+    )
+
+
+library(ggplot2)
+library(gdx)
+require(dplyr)
+options(dplyr.summarise.inform = FALSE)
+library(tidyr)
+library(quitte)
+library(lusweave)
+library(ggsci)
+library(pals)
+library(stringr)
+```
+
+```{r load, echo = FALSE}
+#LOAD GDX
+max_lockin <- "inputdata/gdx/650_govtargets.gdx"
+
+```
+```{R init sets}
+
+
+###################################################
+# CONFIG
+
+gdx <- max_lockin
+#name for plotting
+name <- "Policy-extended fossil lock-in"
+
+
+#plotted_years <- c(2030, 2040, 2050)
+
+plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
+fs = 10 # font size
+
+route_names <- tribble(
+  ~route,          ~route_name,
+  "bfbof",         "BF-BOF",
+  "bfbof_ccs",     "BF-BOF CCS",
+  "idreaf_ng_ccs", "DRI-EAF NG CCS",
+  "idreaf_ng",     "DRI-EAF NG",
+  "idreaf_h2",     "DRI-EAF H2",
+  "seceaf",        "Scrap EAF",
+  "bfbof_ccs_r",   "BF-BOF CCS retrofit"
+)
+
+    
+region_names  <- tribble(
+  ~region, ~region_name,
+  # 'JPN',   'Japan',
+  # 'CAZ',   'Australia*'
+  'EUR',   'EU',
+  'CHA',   'China',
+  'USA',   'USA',
+  'IND',   'India'
+)
+
+###################################################
+# READ IN GENERIC SETS
+
+
+
+tePrc <- readGDX(gdx,"tePrc")
+tePrcAll <- tePrc
+
+tePrc2opmoPrc <- as.data.frame(readGDX(gdx,"tePrc2opmoPrc")) %>% 
+  rename(all_te = tePrc)
+
+entyFE <- as.vector(readGDX(gdx, name="entyFE"))
+
+t <- readGDX(gdx,"ttot")
+t <- as.numeric(t[t >= 2010 & t <= 2100])
+
+regi <- readGDX(gdx,"regi")
+```
+
+We first calculate energy costs, using the prices, from which we first have to substract the CO2 price.
+```{R load CO2 price}
+
+# CARBON COST: Carbon price times average emission per FE (which is determined by SE shares, i.e. fossil/bio/synfuel)
+
+df.priceCO2 <- as.quitte(readGDX(gdx,name=c("p_priceCO2","pm_priceCO2"),format="first_found")) %>%
+    select(region, period, value) %>%
+    # where carbon price is NA, it is zero
+    mutate(value = ifelse(is.na(value), 0, value /1000.)) %>% # carbon price i given in $/tC instead of remind units (tn $/GtC)
+    filter(period %in% t) %>%
+    rename(priceCO2 = value)
+
+```
+
+```{R load and calculate emiFac}	
+
+# emission factors are required to remove the CO2 price from the energy prices
+# these are available for all types of final energy, except electricity and hydrogen
+# for electricity and hydrogen, we need to calculate supply side emissions
+
+#load all emiFac (fe, se, pe)
+df.emiFac_all <- as.quitte(readGDX(gdx, name="pm_emifac", restore_zeros = F)) %>% 
+  filter(all_enty2 == "co2", period %in% t)
+
+# save the Fe for now
+df.emiFacFe <- df.emiFac_all %>% 
+  filter(all_enty1 %in% entyFE) %>%
+  select(period, region, all_enty, all_enty1, value) %>%
+  rename(entySE = all_enty, entyFE = all_enty1, emiFac = value)
+
+### EMI FAC ELEC
+# calculate the emiFac for electricity from the supply side emissions
+# this requires PE emission factors and calculating the PE demand for electricity production
+
+pe2se <- readGDX(gdx, name="pe2se")
+
+#emifac for seel
+emifac_seel <- df.emiFac_all %>%
+  filter(all_te %in% pe2se$all_te, all_enty1 == "seel") %>%
+  select(region, period, value, all_enty, all_te) %>%
+  rename(emiFac = value) %>%
+  mutate(emiFac = if_else(is.na(emiFac), 0., emiFac))
+
+#get PE demand for seel
+vm_demPe_seel <- as.quitte(readGDX(gdx, "vm_demPE", field = "l", restore_zeros = F)) %>%
+  filter(all_enty1 == "seel", period %in% t) %>%
+  select(region, period, all_enty, all_te, value) %>%
+  rename(demPe = value)
+
+#get total SE electricity production
+df.prodSe <- as.quitte(readGDX(gdx, "vm_prodSe", field = "l", restore_zeros = F)) %>%
+  filter(all_enty1 == "seel", period %in% t) %>%
+  group_by(region, period) %>%
+    summarise(prodSe = sum(value)) %>%
+    ungroup()
+
+df_emiPe_seel <- vm_demPe_seel %>%
+  left_join(emifac_seel, by=c("region", "period", "all_enty", "all_te")) %>%
+  mutate(emiFac = if_else(is.na(emiFac), 0., emiFac)) %>% #change renewables emission factor to 0
+  mutate(emiPe = ifelse(demPe != 0, demPe * emiFac, 0.)) %>%
+  group_by(region, period) %>%
+  summarise(emiPetotal = sum(emiPe)) %>%
+    ungroup() %>%
+    #add the production of seel to calculate the emission factor
+    left_join(df.prodSe, by=c("region", "period")) %>%
+    mutate(emiFac = ifelse(prodSe != 0, emiPetotal/prodSe, 0.)) %>%
+    select(region, period, emiFac) %>%
+    mutate(entyFE = "feels", entySE = "seel")
+
+### EMI FAC H2
+# calculate the emiFac for electricity from the supply side emissions
+# this requires PE emission factors and calculating the PE demand for h2 production
+# TODO: likely h2 emission factor also requires elec emiFac
+
+#emifac for h2
+emifac_h2 <- df.emiFac_all %>%
+  filter(all_te %in% pe2se$all_te, all_enty1 == "seh2") %>%
+  select(region, period, value, all_enty, all_te) %>%
+  rename(emiFac = value) %>%
+  mutate(emiFac = if_else(is.na(emiFac), 0., emiFac))
+
+#get PE demand for h2
+vm_demPe_h2 <- as.quitte(readGDX(gdx, "vm_demPE", field = "l", restore_zeros = F)) %>%
+  filter(all_enty1 == "seh2", period %in% t) %>%
+  select(region, period, all_enty, all_te, value) %>%
+  rename(demPe = value)
+
+#get total SE h2 production
+df.prodSe <- as.quitte(readGDX(gdx, "vm_prodSe", field = "l", restore_zeros = F)) %>%
+  filter(all_enty1 == "seh2", period %in% t) %>%
+  group_by(region, period) %>%
+    summarise(prodSe = sum(value)) %>%
+    ungroup()
+
+df_emiPe_h2 <- vm_demPe_h2 %>%
+  left_join(emifac_h2, by=c("region", "period", "all_enty", "all_te")) %>%
+  mutate(emiFac = if_else(is.na(emiFac), 0., emiFac)) %>% #change renewables emission factor to 0
+  mutate(emiPe = ifelse(demPe != 0, demPe * emiFac, 0.)) %>%
+  group_by(region, period) %>%
+  summarise(emiPetotal = sum(emiPe)) %>%
+    ungroup() %>%
+    #add the production of h2 to calculate the emission factor
+    left_join(df.prodSe, by=c("region", "period")) %>%
+    mutate(emiFac = ifelse(prodSe != 0, emiPetotal/prodSe, 0.)) %>%
+    select(region, period, emiFac) %>%
+    mutate(entyFE = "feh2s", entySE = "seh2")
+
+# combine elec emiFac with the other (FE) emifac
+# TODO: check there is no issue with using seel for feels emifac
+df.emiFac <- df.emiFacFe %>%
+  bind_rows(df_emiPe_seel) %>%
+  bind_rows(df_emiPe_h2)
+
+```
+
+```{R calculate energy demand and prices}
+
+df.demFe <- as.quitte(readGDX(gdx, "vm_demFeSector_afterTax", field = "l", restore_zeros = F)[,t,]) %>%
+  # dimensions: vm_demFeSector_afterTax(ttot,regi,entySE,entyFE,"indst",emiMkt)
+  filter(all_enty1 %in% entyFE, emi_sectors == "indst", all_emiMkt == "ETS", value > 0.) %>%
+  select(period, region, all_enty, all_enty1, value) %>%
+  rename(demFE = value, entySE = all_enty, entyFE = all_enty1) 
+  
+df.emiFacAvg <- df.demFe %>% 
+  left_join(df.emiFac, by=c("region", "period", "entySE", "entyFE")) %>%
+  mutate(emiFac = if_else(is.na(emiFac), 0., emiFac), emiTot = demFE * emiFac) %>%
+  group_by(period, region, entyFE) %>%
+  summarise(emiTot = sum(emiTot), demFE = sum(demFE)) %>%
+  ungroup() %>%
+  filter(demFE > 0.) %>%
+  mutate(emiFac = emiTot / demFE) %>%
+  select(-emiTot, -demFE)
+
+# FE tax per unit of burnt FE (USD/GWa)
+df.FeEmiCost <- df.priceCO2 %>% 
+  right_join(df.emiFacAvg, by=c("period", "region")) %>% 
+  mutate(FeEmiCost = priceCO2 * emiFac) %>%
+  select(-emiFac, -priceCO2)
+
+
+#### CALC FUEL PRICES: take price differentiated by SE, then take weighted sum according to SE shares.
+df.priceFuel <- as.quitte(readGDX(gdx, "p_FEPrice_by_SE_Sector_EmiMkt", restore_zeros = F)) %>%
+  filter(sector == "indst", emiMkt == "ETS", value > 0., period %in% t) %>%
+  select(region, period, entySe, all_enty, value) %>%
+  rename(entySE = entySe, entyFE = all_enty, priceFuel = value)
+
+df.demFETotal = df.demFe  %>% 
+  group_by( region, period, entyFE) %>% 
+  summarize(demFETotal = sum(demFE)) %>%
+  ungroup
+df.SEShares = df.demFe  %>%
+  left_join(df.demFETotal, by=c("region", "period", "entyFE")) %>%
+  mutate(SEShare = demFE / demFETotal) %>%
+  select(-demFE, -demFETotal)
+df.priceFuel <- df.priceFuel %>%
+  left_join(df.SEShares, by=c("region", "period", "entySE", "entyFE")) %>%
+  mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) %>% 
+  group_by(region, period, entyFE) %>% 
+  summarize(priceFuel = sum(priceFuel)) %>%
+  ungroup
+
+#prices obtained from SE sector are not available before 2030, so we take pm_FEPrice for these
+df.priceFuel_before_2030 <- as.quitte(readGDX(gdx, "pm_FEPrice", restore_zeros = F)) %>%
+  filter(sector == "indst", emiMkt == "ETS", value > 0., period %in% t, period<2030) %>%
+  select(region, period, all_enty, value) %>%
+  rename(entyFE = all_enty, priceFuel = value)
+
+df.priceFuel <- df.priceFuel %>%
+    bind_rows(df.priceFuel_before_2030)
+
+df.priceFuel <- df.priceFuel[order(df.priceFuel$period, df.priceFuel$entyFE),]
+
+
+#### Subtract FE tax from fuel price
+df.priceFuel <- df.priceFuel %>%
+  left_join(df.FeEmiCost, by=c("region", "period", "entyFE")) %>%
+  mutate(priceFuel = priceFuel - ifelse(is.na(FeEmiCost), 0., FeEmiCost)) %>%
+  select(-FeEmiCost)
+
+### calculate Fe demand for the different steel routes, and the corresponding FE cost per ton of steel (USD/?t)
+
+# specFeDem is given in TWa/Gt.
+df.specFeDem <- as.quitte(readGDX(gdx,name=c("pm_specFeDem"),format="first_found",restore_zeros = F)) %>% 
+  filter(value > 0., period %in% t) %>%
+  select(region, period, all_enty, all_te, opmoPrc, value) %>%
+  rename(entyFE = all_enty, specFeDem = value)
+
+# prices are given in trUSD/TWa,
+# so cost fuel is in trUSD/Gt or USD/t
+df.costFuel = df.specFeDem %>% 
+  left_join(df.priceFuel, by = c("region", "period", "entyFE")) %>% 
+  mutate(value = specFeDem * priceFuel) %>% 
+  mutate(component = entyFE) 
+#   %>% 
+#   select(-priceFuel, -specFeDem, -entyFE)
+
+```
+
+
+```{R test}
+
+test <- df.costFuel %>%
+    filter(is.na(value))
+test
+
+test <- df.priceFuel %>%
+  filter(region == "CAZ", entyFE == "fesos")
+test
+
+test <- df.priceFuel %>%
+  filter(region == "OAS", entyFE == "feh2s")
+test
+
+```
+
+```{R calculate material costs}
+# calculate costs from DRI pellets, iron ore ..
+###################################################
+# MATERIAL
+# calculates cost of material required
+# for DRIEAF: dri pellets, dri iron. If secondary EAF, additional scrap.
+# for BFBOF: iron ore, pig iron, BOF scrap (very very small)
+
+#specMatDem is given in t/t
+specMatDem <- as.quitte(readGDX(gdx,name=c("p37_specMatDem"),format="first_found",restore_zeros = F)) %>% 
+  filter(value > 0.) %>%
+  select(mat, all_te, opmoPrc, value) %>%
+  rename( specMatDem = value)
+
+priceMat <- as.quitte(readGDX(gdx,name=c("p37_priceMat"),format="first_found",restore_zeros = F)) %>% 
+  filter(value > 0.) %>%
+  select(all_enty, value) %>%
+  rename( priceMat = value, mat = all_enty)
+
+#final costs are in USD/t or trUSD/Gt 
+df.costMat = specMatDem %>% 
+  left_join(priceMat, by = "mat") %>% 
+  mutate(value = specMatDem * priceMat) %>% 
+  filter(value > 0.) %>%
+  rename(component = mat) %>% 
+  select(-specMatDem, -priceMat) %>%
+  crossing(t, regi) %>% 
+  rename(period = t, region = regi)
+```
+
+```{R calc CAPEX and OPEX}
+
+#### CALC CAPEX
+
+#in USD/t capacity
+df.CAPEX <- as.quitte(readGDX(gdx, "vm_costTeCapital", field = "l", restore_zeros = F)[,t,tePrcAll]) %>%
+    select(region, period, all_te, value) %>%
+    mutate(component = "CAPEX")
+
+#### CALC OPEX
+# requires capacity factor and O&M costs
+df.capFac <- as.quitte(readGDX(gdx, "vm_capFac", field="l", restore_zeros = F)[,t,]) %>%
+    select(region, period, all_te, value) %>%
+    filter(all_te %in% tePrcAll ) %>%
+    rename(capFac = value)
+
+df.OMF <- as.quitte(readGDX(gdx, "pm_data", restore_zeros = F)[,,"omf"]) %>%
+    select(region, all_te, value) %>%
+    filter(all_te %in% tePrcAll, value > 0.) %>%
+    # mutate(component = "OMF") %>% 
+    full_join(df.CAPEX %>% 
+                left_join(df.capFac, by=c("region", "period", "all_te")) %>%
+                mutate(value = value / capFac) %>%  # conversion from MW/a to MWh/a
+                rename(CAPEX = value) %>%
+                select(region, period, all_te, CAPEX),
+              by=c("region", "all_te")) %>%
+    mutate(value = value * CAPEX ) %>% 
+    select(-CAPEX)
+
+df.OMV <- as.quitte(readGDX(gdx, "pm_data", restore_zeros = F)[,,"omv"]) %>%
+    select(region, all_te, value) %>%
+    filter(all_te %in% tePrcAll, value > 0.)
+
+df.OPEX <- bind_rows(df.OMF, df.OMV) %>% 
+  group_by( region, period, all_te) %>% 
+  summarize(value = sum(value)) %>%
+  ungroup  %>%
+  mutate(component = "OPEX") %>% 
+  full_join(tePrc2opmoPrc, by="all_te")
+
+
+```
+
+```{R combine costs}
+#### COMBINE COSTS
+# combine df.costFuel, df.costMat, df.CAPEX, df.OPEX
+# they need to be multiplied either by the production (costs and OPEX) or the capacity additions (CAPEX)
+# all quantities below should be in Gt/a or Gt
+# all the costs are in USD/t, corresponding to trUSD/Gt
+
+# get yearly production, Gt/a. outflowPrc (2005) is the avg production between 2002.5 and 2007.5
+df.outflowPrc <- as.quitte(readGDX(gdx, "vm_outflowPrc", field = "l", restore_zeros = F)[,t,]) %>%
+  filter(all_te %in% tePrcAll) %>%
+  select(region, period, all_te, value, opmoPrc) %>%
+  rename(outflowPrc = value)
+
+#vm_delatCap are the annual capacity additions. vm_deltaCap 2005 = annual capacity additions between 2001 and 2005.
+df.deltacap <- as.quitte(readGDX(gdx, "vm_deltaCap", field = "l", restore_zeros = F)[,t,]) %>%
+  filter(all_te %in% tePrcAll) %>%
+  select(region, period, all_te, value) %>%
+  rename(deltacap = value)
+
+# we have to match vm_deltacap with the standard REMIND variables, ie defining 2005 as 2002.5 -> 2007.5.
+# for this, we need to recalculate df.deltacap.
+# the additions in 2005 are now (3.5* vm_deltacap("2005") + 1.5 * vm_deltacap("2010"))/5 to get the yearly amount
+df.deltacap_new <- df.deltacap %>%
+    group_by(region, all_te) %>%
+    mutate(deltacap_new = (3.5 * deltacap +1.5*lead(deltacap))/5) %>%
+    ungroup() %>%
+    mutate(deltacap_new = ifelse(is.na(deltacap_new), deltacap, deltacap_new)) %>% #values for 2100 cant be calculated because there is no 2105 value
+    select(-deltacap) %>%
+    rename(deltacap = deltacap_new)
+
+#calc total CAPEX per year (trUSD)
+df.CAPEX_total <- df.CAPEX %>%
+  left_join(df.deltacap_new, by=c("region", "period", "all_te")) %>%
+  mutate(value = value * deltacap ) %>%
+  select(-deltacap) %>%
+  group_by(region, period) %>%
+    summarise(value = sum(value)) %>%
+    ungroup() %>%
+    mutate(component = "CAPEX")
+
+#calc total OPEX, matcost, energy costs per year (trUSD)
+df.OPEX_total <- df.OPEX %>%
+  left_join(df.outflowPrc, by=c("region", "period", "all_te", "opmoPrc")) %>%
+  mutate(value = value * outflowPrc) %>%
+  select(-outflowPrc) %>%
+    group_by(region, period) %>%
+        summarise(value = sum(value)) %>%
+        ungroup() %>%
+        mutate(component = "OPEX")
+
+df.costFuel_total <- df.costFuel %>%
+  left_join(df.outflowPrc, by=c("region", "period", "all_te", "opmoPrc")) %>%
+  mutate(value = value * outflowPrc) %>%
+  select(-outflowPrc) %>%
+    group_by(region, period) %>%
+        summarise(value = sum(value)) %>%
+        ungroup() %>%
+        mutate(component = "Energy costs")
+
+df.costMat_total <- df.costMat %>%
+    left_join(df.outflowPrc, by=c("region", "period", "all_te", "opmoPrc")) %>%
+    mutate(value = value * outflowPrc) %>%
+    select(-outflowPrc) %>%
+    group_by(region, period) %>%
+        summarise(value = sum(value)) %>%
+        ungroup() %>%
+        mutate(component = "Materials")
+
+#costs given in trUSD
+df.totalcosts <- df.CAPEX_total %>%
+  bind_rows(df.OPEX_total) %>%
+  bind_rows(df.costFuel_total) %>%
+  bind_rows(df.costMat_total)
+
+df.totalcosts_global <- df.totalcosts %>%
+  group_by(period, component) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(region = "Global")
+```
