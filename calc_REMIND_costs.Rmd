@@ -29,7 +29,7 @@ name <- "Policy-extended fossil lock-in"
 
 #plotted_years <- c(2030, 2040, 2050)
 
-plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
+plotted_regions <- c('EUR', 'CHA', 'USA', 'IND', 'GLO') 
 fs = 10 # font size
 
 route_names <- tribble(
@@ -51,7 +51,8 @@ region_names  <- tribble(
   'EUR',   'EU',
   'CHA',   'China',
   'USA',   'USA',
-  'IND',   'India'
+  'IND',   'India',
+  'GLO',   'Global'
 )
 
 ```
@@ -166,6 +167,90 @@ calc_emfac <- function(gdx) {
 }
 ```
 
+```{R calc t&d costs}
+#creates function to calculate transmission and distribution costs
+# these are only needed for when energy prices are calculated without a Co2 price 
+# using SE prices, which do not include t&d costs
+
+calc_td_costs <- function(gdx, df.priceFuel) {
+
+  se2fe <- readGDX(gdx, name="se2fe") %>%
+    rename(entySE = all_enty, entyFE = all_enty1, te_td = all_te)
+
+  df.priceFuel <- df.priceFuel %>%
+    left_join(se2fe, by=c("entySE","entyFE"))
+
+  td_list <- unique(df.priceFuel$te_td)
+
+  df.capFac <- as.quitte(readGDX(gdx, "vm_capFac", field="l", restore_zeros = F)[,t,]) %>%
+      select(region, period, all_te, value) %>%
+      filter(all_te %in% td_list ) %>%
+      rename(capFac = value)
+
+  wacc <- 0.05
+
+  lifetime <- as.quitte(readGDX(gdx, name="fm_dataglob", restore_zeros = F)[,,"lifetime"][,,][,,"lifetime"]) %>% 
+    filter(all_te %in% td_list)
+
+  df.discFac <- lifetime %>%
+    select(all_te, value) %>%
+    rename(lifetime = value) %>%
+    mutate( discFac = wacc * (1+wacc)^lifetime/(-1.+(1+wacc)^lifetime)) %>%
+    select(all_te, discFac)
+
+  df.CAPEX <- as.quitte(readGDX(gdx, "vm_costTeCapital", field = "l", restore_zeros = F)[,t,]) %>%
+      filter(all_te %in% td_list) %>%
+      select(region, period, all_te, value) %>%
+      left_join(df.capFac, by=c("region", "period", "all_te")) %>%
+      mutate(value = value / capFac) %>%  # conversion from MW/a to MWh/a
+      select(-capFac)
+
+  df.OPEX <- as.quitte(readGDX(gdx, "pm_data", restore_zeros = F)[,,"omf"]) %>%
+      select(region, all_te, value) %>%
+      filter(all_te %in% td_list, value > 0.) %>%
+      full_join(df.CAPEX %>% 
+                  rename(CAPEX = value) %>%
+                  select(region, period, all_te, CAPEX),
+                by=c("region", "all_te")) %>%
+      mutate(OPEX = value * CAPEX ) %>% 
+      select(-CAPEX, -value)
+    
+  # multiply with discount factor (has to be done after calculating OPEX)
+  df.CAPEX <- df.CAPEX %>% 
+    left_join(df.discFac, by="all_te") %>% 
+    mutate(CAPEX = value * discFac) %>% 
+    select(-discFac, -value)
+
+  # eta, transmission efficiency
+  df.eta <- as.quitte(readGDX(gdx, "pm_data", restore_zeros = F)[,,"eta"]) %>%
+      select(region, all_te, value) %>%
+      filter(all_te %in% td_list, value > 0.) %>%
+      rename(eta = value)
+
+  df.td_costs <- df.CAPEX %>%
+    full_join(df.OPEX, by=c("region", "period", "all_te")) %>%
+    left_join(df.eta, by=c("region", "all_te")) %>%
+    mutate(td_costs = (CAPEX + OPEX) ) %>%
+    select(region, period, all_te, td_costs, eta) %>%
+    rename(te_td = all_te)
+
+
+  df.priceFuel <- df.priceFuel %>%
+    left_join(df.td_costs, by=c("region", "period", "te_td")) %>%
+    # here, we assume transmission costs are given in terms of incoming energy
+    # which means we divide the full price (SEprice + t&d costs) by the efficiency (eta)
+    mutate(priceSEtd = (priceSE + td_costs) / eta) %>%
+    select(-te_td, -td_costs, -eta, -priceSE) %>%
+    #some SE prices have no corresponding FE demand for industry (seliqsyn, sehe, segasyn). remove them
+    mutate(priceFuel = priceSEtd * replace_na(SEShare, 0.)) %>% 
+    group_by(region, period, entyFE) %>% 
+    summarize(priceFuel = sum(priceFuel)) %>%
+    ungroup()
+
+  return(df.priceFuel)
+}
+
+```
 ```{R calculate energy demand and prices}
 
 #calculates energy costs and demand based on a given gdx. 
@@ -264,11 +349,10 @@ calc_energy_costs <- function(gdx, include_co2_price = TRUE) {
 
     df.priceFuel <- df.priceFuel %>%
       left_join(df.SEShares, by=c("region", "period", "entySE")) %>%
-      filter(!is.na(entyFE)) %>% #some SE prices have no corresponding FE demand for industry (seliqsyn, sehe, segasyn). remove them
-      mutate(priceFuel = priceSE * replace_na(SEShare, 0.)) %>% 
-      group_by(region, period, entyFE) %>% 
-      summarize(priceFuel = sum(priceFuel)) %>%
-      ungroup
+      filter(!is.na(entyFE))  #some SE prices have no corresponding FE demand for industry (seliqsyn, sehe, segasyn). remove them
+
+    #add transmission and distribution costs
+    df.priceFuel <- calc_td_costs(gdx, df.priceFuel)
 
     #### Subtract CO2 tax from fuel price (currently only needs ot be done for elec)
     df.priceFuel <- df.priceFuel %>%
@@ -395,12 +479,13 @@ calc_cumulative_costs <- function(df, start_year, end_year) {
   df_expanded <- expand.grid(
     region = unique(df$region),
     period = full_timesteps,
-    component = unique(df$component)
+    component = unique(df$component),
+    scenario = unique(df$scenario)
   )
 
   full_df <- df_expanded %>%
-    left_join(df, by = c("region", "period", "component")) %>%
-    group_by(region, component) %>%
+    left_join(df, by = c("region", "period", "component", "scenario")) %>%
+    group_by(region, component, scenario) %>%
     arrange(period) %>%
     mutate(value = ifelse(is.na(value), lead(value), value)) %>%
     #since the variables are defined such that 2070 = between 2067.5 and 2072.5, we multiply the value by 2.5 for the last year step
@@ -408,7 +493,7 @@ calc_cumulative_costs <- function(df, start_year, end_year) {
     mutate(value_5_year = ifelse(period == end_year, value * 2.5, value * 5)) %>%
     mutate(cumulative_value = cumsum(value_5_year)) %>%
     ungroup() %>% 
-    select(region, period, component, cumulative_value)
+    select(region, period, scenario, component, cumulative_value)
 
   return(full_df)
 }
@@ -416,7 +501,7 @@ calc_cumulative_costs <- function(df, start_year, end_year) {
 ```
 
 ```{R combine costs}
-calc_total_costs <- function(gdx, include_co2_price = TRUE, start_year = 2020, end_year = 2070) {
+calc_total_costs <- function(gdx, scenario_name, include_co2_price = TRUE, start_year = 2020, end_year = 2070) {
   #### COMBINE COSTS
   # calculate and combine df.costFuel, df.costMat, df.CAPEX, df.OPEX
   # they need to be multiplied either by the production (costs and OPEX) or the capacity additions (CAPEX)
@@ -507,7 +592,8 @@ calc_total_costs <- function(gdx, include_co2_price = TRUE, start_year = 2020, e
     mutate(region = "GLO")
 
   df.totalcosts <- df.totalcosts %>%
-    bind_rows(df.totalglobalcosts)
+    bind_rows(df.totalglobalcosts) %>% 
+    mutate(scenario = scenario_name)
 
   #calculate cumulative costs
   df.cumulativecosts <- calc_cumulative_costs(df.totalcosts, start_year = start_year, end_year = end_year)
@@ -534,17 +620,221 @@ t <- as.numeric(t[t >= 2010 & t <= 2100])
 ```
 
 ```{r calculate costs}
-greenpol <- "inputdata/gdx/GreenPolicyEarlyReti-PkBudg650.gdx"
-base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
+# greenpol <- "inputdata/gdx/GreenPolicyEarlyReti-PkBudg650.gdx"
+# base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
+
+greenpol <- "inputdata/gdx/GreenPolicyEarlyReti_regPol-PkBudg1000.gdx"
+base <- "inputdata/gdx/PolicyExtended_regPol-PkBudg1000.gdx"
 #calculate costs
-df.totalcosts <- calc_total_costs(greenpol, include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
 
-print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
+df.totalcosts2 <- calc_total_costs(base, scenario_name = "base", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
 
-df.totalcosts <- calc_total_costs(base, include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+# print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
 
-print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
+# print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
 
+
+```
+
+```{R tests}
+df.totalcosts <- bind_rows(df.totalcosts1$cumu, df.totalcosts2$cumu) %>%
+  pivot_wider(names_from = scenario, values_from = cumulative_value) %>% 
+  mutate(diff_scenarios = `greenpol` - `base`) %>%
+  mutate(perc_diff_scenarios = diff_scenarios / (`base` + `greenpol`) * 100)
+
+df.totalcosts_aggr <- df.totalcosts %>%
+  group_by(region, period) %>%
+  summarise(total_greenpol = sum(greenpol),
+            total_base = sum(base)) %>%
+  mutate(diff_scenarios = total_greenpol - total_base) %>%
+  mutate(perc_diff_scenarios = diff_scenarios / (total_base + total_greenpol) * 100) %>% 
+  select(-total_greenpol, -total_base)
+
+plot_df <- df.totalcosts %>%
+  filter(region %in% plotted_regions) %>%
+  mutate(region = factor(region, levels = plotted_regions, labels = region_names$region_name)) %>%
+  mutate(period = as.numeric(period)) %>% 
+  select(-greenpol, - base)
+
+# print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
+```
+
+```{r plot costs}
+
+component_order <- c("CAPEX", "OPEX","Materials", "Energy costs")
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order)
+  )
+
+
+#filter global and non global results
+plot_df_global <- plot_df %>% filter(region == "Global")
+plot_df_others <- plot_df %>% filter(region != "Global")
+
+
+# Area plot
+region_plot <- ggplot(plot_df_others, aes(x = period, y = diff_scenarios, fill = component)) +
+  geom_area(position = "stack", alpha = 0.5) +
+  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
+  # to add a smooth line on top
+  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
+  facet_wrap(~ region, scales = "free_y") +
+  labs(
+    title = "",
+    x = "Year",
+    y = "Cumulative cost difference\n(trUSD)",
+    fill = "Component"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom",
+  )
+
+global_plot <- ggplot(plot_df_global, aes(x = period, y = diff_scenarios, fill = component)) +
+  geom_area(position = "stack", alpha = 0.5) +
+  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
+  # to add a smooth line on top
+  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
+  facet_wrap(~ region, scales = "free_y") +
+  labs(
+    title = "Cumulative cost difference between the green policy and base scenarios\nfor the well-below 2°C target scenarios with regional net-zero targets",
+    x = "Year",
+    y = "Cumulative cost difference\n(trUSD)",
+    fill = "Component"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "none",
+    plot.margin=unit(c(1,1,-0.5,1), "cm")
+  ) +
+  #add arrow at 2020 and annotation
+  annotate("segment", x = 2025, xend = 2025, y = 0, yend = max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
+  geom_text(aes(x = 2029, y = max(plot_df_global$diff_scenarios) * 0.9, label = "Green policy more expensive\nthan base transition"), color = "#797777", size = 4, hjust =0.3) +
+  annotate("segment", x = 2025, xend = 2025, y = 0, yend = -max(plot_df_global$diff_scenarios)*3, arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
+  geom_text(aes(x = 2029, y = -max(plot_df_global$diff_scenarios) * 2.5, label = "Green policy less expensive\nthan base transition"), color = "#797777", size = 4, hjust =0.3)
+
+final_plot <- gridExtra::grid.arrange(global_plot,region_plot,  ncol = 1)
+
+print(final_plot)
+#save
+# ggsave("figs_temp/costs_greenpol_vs_base_1000_reg.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+# ggsave("figs_temp/costs_greenpol_vs_NPi_1000_reg.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+```
+
+```{r calculate costs}
+
+greenpol <- "inputdata/gdx/GreenPolicyEarlyReti-PkBudg650.gdx"
+npi <- "inputdata/gdx/GreenPolicyEarlyReti-NPi.gdx"
+#calculate costs
+df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+
+df.totalcosts2 <- calc_total_costs(npi, scenario_name = "npi", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+
+# print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
+
+# print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
+
+
+```
+
+```{R tests}
+df.totalcosts <- bind_rows(df.totalcosts1$cumu, df.totalcosts2$cumu) %>%
+  pivot_wider(names_from = scenario, values_from = cumulative_value) %>% 
+  mutate(diff_scenarios = `greenpol` - `npi`) %>%
+  mutate(perc_diff_scenarios = diff_scenarios / (`npi` + `greenpol`) * 100)
+
+df.totalcosts_aggr <- df.totalcosts %>%
+  group_by(region, period) %>%
+  summarise(total_greenpol = sum(greenpol),
+            total_npi = sum(npi)) %>%
+  mutate(diff_scenarios = total_greenpol - total_npi) %>%
+  mutate(perc_diff_scenarios = diff_scenarios / (total_npi + total_greenpol) * 100) %>% 
+  select(-total_greenpol, -total_npi)
+
+plot_df <- df.totalcosts %>%
+  filter(region %in% plotted_regions) %>%
+  mutate(region = factor(region, levels = plotted_regions, labels = region_names$region_name)) %>%
+  mutate(period = as.numeric(period)) %>% 
+  select(-greenpol, - npi)
+
+# print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
+```
+
+```{r plot costs}
+
+component_order <- c("CAPEX", "OPEX","Materials", "Energy costs")
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order)
+  )
+
+
+#filter global and non global results
+plot_df_global <- plot_df %>% filter(region == "Global")
+plot_df_others <- plot_df %>% filter(region != "Global")
+
+
+# Area plot
+region_plot <- ggplot(plot_df_others, aes(x = period, y = diff_scenarios, fill = component)) +
+  geom_area(position = "stack", alpha = 0.5) +
+  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
+  # to add a smooth line on top
+  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
+  facet_wrap(~ region, scales = "free_y") +
+  labs(
+    title = "",
+    x = "Year",
+    y = "Cumulative cost difference\n(trUSD)",
+    fill = "Component"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom",
+  )
+
+global_plot <- ggplot(plot_df_global, aes(x = period, y = diff_scenarios, fill = component)) +
+  geom_area(position = "stack", alpha = 0.5) +
+  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
+  # to add a smooth line on top
+  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
+  facet_wrap(~ region, scales = "free_y") +
+  labs(
+    title = "Cumulative cost difference between the green policy runs\n between an NPi and a 1.5°C target scenario",
+# title = "Cumulative cost difference between the green policy runs\n between an NPi and a well-below 2°C target scenario",
+    x = "Year",
+    y = "Cumulative cost difference\n(trUSD)",
+    fill = "Component"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "none",
+    plot.margin=unit(c(1,1,-0.5,1), "cm")
+  ) +
+  #add arrow at 2020 and annotation
+  annotate("segment", x = 2025, xend = 2025, y = 0, yend = max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
+  geom_text(aes(x = 2029, y = max(plot_df_global$diff_scenarios) * 0.7, label = "Climate target\nscenario more expensive\nthan NPi"), color = "#797777", size = 4, hjust =0.3) +
+  annotate("segment", x = 2025, xend = 2025, y = 0, yend = -max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
+  geom_text(aes(x = 2029, y = -max(plot_df_global$diff_scenarios) * 0.7, label = "Climate target\nscenario less expensive\nthan NPi"), color = "#797777", size = 4, hjust =0.3)
+
+final_plot <- gridExtra::grid.arrange(global_plot,region_plot,  ncol = 1)
+
+print(final_plot)
+#save
+ggsave("figs_temp/costs_greenpol_NPi_vs_650.png", plot = final_plot, width = 10, height = 12, dpi = 300)
 ```
 
 
