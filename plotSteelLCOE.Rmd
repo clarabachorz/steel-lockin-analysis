@@ -21,7 +21,7 @@ library(stringr)
 
 ```{r load, echo = FALSE}
 #LOAD GDX
-max_lockin <- "inputdata/gdx/<...>.gdx"
+max_lockin <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
 
 ```
 
@@ -33,11 +33,11 @@ max_lockin <- "inputdata/gdx/<...>.gdx"
 
 gdx <- max_lockin
 #name for plotting
-name <- "Policy-extended fossil lock-in"
+name <- "Green Policy 650"
 
 
-plotted_years <- c(2030, 2040, 2050)
-# plotted_years <- c(2070, 2080, 2090)
+# plotted_years <- c(2030, 2040, 2050)
+plotted_years <- c(2025, 2030, 2035)
 # plotted_regions <- c("JPN","CAZ")
 plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
 # plotted_regions <- c('CHA', 'IND') 
@@ -194,12 +194,11 @@ df.priceFuel <- df.priceFuel %>%
 #up to here, df.priceFuel is kind of correct. It fluctuates quite a lot, but seems coherent
 
 # Subtract FE tax from fuel price
-#### this section is the issue. Makes solids in eg. China go to negative values
-#### because of df.FeEmiCost being very high.
-df.priceFuel <- df.priceFuel %>%
-  left_join(df.FeEmiCost, by=c("region", "period", "entyFE")) %>%
-  mutate(priceFuel = priceFuel - ifelse(is.na(FeEmiCost), 0., FeEmiCost)) %>%
-  select(-FeEmiCost)
+## currently not using! Using only FE prices, no CO2
+# df.priceFuel <- df.priceFuel %>%
+#   left_join(df.FeEmiCost, by=c("region", "period", "entyFE")) %>%
+#   mutate(priceFuel = priceFuel - ifelse(is.na(FeEmiCost), 0., FeEmiCost)) %>%
+#   select(-FeEmiCost)
 
 df.specFeDem <- as.quitte(readGDX(gdx,name=c("pm_specFeDem"),format="first_found",restore_zeros = F)) %>% 
   filter(value > 0., period %in% t) %>%
@@ -297,7 +296,7 @@ df.cap <- as.quitte(readGDX(gdx, "vm_cap", field="l", restore_zeros = F)[,t,]) %
 wacc <- 0.045
 
 lifetime <- readGDX(gdx, name="fm_dataglob", restore_zeros = F)[,,"lifetime"][,,tePrcAll][,,"lifetime"]
-print(lifetime)
+
 df.discFac <- as.quitte(lifetime) %>%
   select(all_te, value) %>%
   rename(lifetime = value) %>%
@@ -386,7 +385,8 @@ df.CAPEX <- df.CAPEX %>%
 lcop <- bind_rows(df.costMat, 
                   df.costFuel,
                   #df.costInj,
-                  df.costCO2,
+                  #currently not including Co2 prices
+                  #df.costCO2,
                   df.CAPEX,
                   df.OPEX
                   )
@@ -441,12 +441,80 @@ lcop <- lcop %>%
 
 
 ```
+
+```{R}
+########################
+## TAKE AVG VALUES
+### add averaging routine: value given in 2025 is actually averaged LCOP over 2025+ lifetime asset 
+
+
+add_5y_timesteps <- function(df) {
+  
+  full_timesteps <- seq(2005, 2100, by=5)
+
+  te2route <- tePrc2route %>%
+    select(all_te, route)
+
+  df_expanded <- expand.grid(
+      region = unique(df$region),
+      period = full_timesteps,
+      component = unique(df$component),
+      route = unique(df$route),
+      all_te = unique(df$all_te))
+
+
+  full_df <- df_expanded %>%
+    left_join(df, by = c("region", "period", "component", "all_te", "route")) %>%
+    group_by(region,route,all_te,component) %>%
+    arrange(period) %>%
+    mutate(value = ifelse(is.na(value), lead(value), value)) %>% 
+    ungroup()
+
+  full_df <- full_df %>%
+    inner_join(te2route, by=c("all_te", "route")) %>%
+    #remove rows where value is NA
+    # for example, the matching gives bof scrap rows for drieaf, which are then NA 
+    filter(!is.na(value))
+}
+
+lcop_avg <- lcop %>% 
+  select(-relativeOutflow, -opmoPrc, -entyFE) 
+
+#fill in the missing time steps
+lcop_avg <- add_5y_timesteps(lcop_avg)
+
+#add lifetime info and end date
+lcop_avg <- lcop_avg %>%
+  left_join(as.quitte(lifetime) %>%
+      select(all_te, value) %>%
+    rename(lifetime = value), by="all_te") %>% 
+  mutate(end_period = period + lifetime) %>%
+  #we have no info after 2100. The more interesting period is earlier anyways
+  filter( period >= 2020) %>% 
+  select(-lifetime) %>% 
+  #calculate mean values over lifetime of the plant
+  rowwise() %>%
+  mutate(avg_value = mean(
+    lcop_avg$value[
+      lcop_avg$region == region &
+      lcop_avg$route == route &
+      lcop_avg$component == component &
+      lcop_avg$all_te == all_te &
+      lcop_avg$period >= period & 
+      lcop_avg$period <= end_period]
+    )
+  ) %>%
+  select(-value, -end_period) %>%
+  rename(value = avg_value)
+
+```
+
 ```{R}
 
 ###################################################
 # PREPARE FOR PLOTTING
 
-lcop_plot <- lcop %>%
+lcop_plot <- lcop_avg %>%
   left_join(route_names, by="route") %>% 
   select(-route) %>% 
   rename(route = route_name) %>%
@@ -597,14 +665,16 @@ lcop_plot <- lcop_plot %>%
 # PLOT BOTH ROUTES
 lcop_plot
 lcop_2r <- lcop_plot %>%
-  filter(route %in% c("BF-BOF CCS retrofit", "DRI-EAF H2", "BF-BOF", "DRI-EAF NG")) %>%
+  # filter(route %in% c("BF-BOF CCS retrofit", "DRI-EAF H2", "BF-BOF", "DRI-EAF NG")) %>%
+  filter(route %in% c("DRI-EAF H2", "BF-BOF", "DRI-EAF NG")) %>%
   mutate(pos = period %>% as.factor() %>% as.numeric(),
           route = as.factor(route))
 
 #test to plot bars next to noe another
 lcop_2r <- lcop_2r %>%
   # mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.15, pos - 0.15))
-  mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.3, ifelse(route == "BF-BOF", pos - 0.3, ifelse(route == "DRI-EAF NG", pos + 0.1, pos - 0.1))))
+  # mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.3, ifelse(route == "BF-BOF", pos - 0.3, ifelse(route == "DRI-EAF NG", pos + 0.1, pos - 0.1))))
+  mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.3, ifelse(route == "BF-BOF", pos - 0.1, ifelse(route == "DRI-EAF NG", pos + 0.1, pos - 0.1))))
 
 label_data <- lcop_2r %>%
   group_by(route, pos_offset, region) %>%
@@ -630,7 +700,6 @@ component_names_1r <- component_names %>%
 lcop_2r <- lcop_2r %>%
   arrange(factor(component, levels = rev(unique_component_names)))
 
-print(filter(lcop_2r, route == "BF-BOF CCS retrofit"))
 
 p.drieaf <- ggplot() +
   geom_bar(
