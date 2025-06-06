@@ -247,6 +247,32 @@ calc_td_costs <- function(gdx, df.priceFuel) {
     summarize(priceFuel = sum(priceFuel)) %>%
     ungroup()
 
+  #add FE tax and subsidies
+
+  df.fetax <- as.quitte(readGDX(gdx, name="p21_tau_fe_tax", restore_zeros = F)) %>%
+  filter(emi_sectors == "indst", value != 0. ) %>%
+  select(region, period, value, all_enty) %>%
+  rename(fe_tax = value)
+
+  df.fesub <- as.quitte(readGDX(gdx, name="p21_tau_fe_sub", restore_zeros = F)) %>%
+    filter(emi_sectors == "indst", value != 0. ) %>%
+    select(region, period, value, all_enty) %>%
+    rename(fe_sub = value)
+
+  df.finalfetax <- df.fetax %>%
+    full_join(df.fesub, by=c("region", "period", "all_enty")) %>%
+    mutate(fe_tax = ifelse(is.na(fe_tax), 0., fe_tax),
+          fe_sub = ifelse(is.na(fe_sub), 0., fe_sub)) %>%
+    mutate(fe_tax_final = fe_tax + fe_sub) %>%
+    select(region, period, all_enty, fe_tax_final) %>%
+    rename(entyFE = all_enty)
+
+  df.priceFuel <- df.priceFuel %>%
+    left_join(df.finalfetax, by=c("region", "period", "entyFE")) %>%
+    mutate(fe_tax_final = ifelse(is.na(fe_tax_final), 0., fe_tax_final),
+            priceFuel = priceFuel + fe_tax_final) %>%
+    select(-fe_tax_final)
+
   return(df.priceFuel)
 }
 
