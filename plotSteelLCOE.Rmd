@@ -33,11 +33,11 @@ max_lockin <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
 
 gdx <- max_lockin
 #name for plotting
-name <- "Green Policy 650"
+name <- "Green Policy 1000"
 
 
-# plotted_years <- c(2030, 2040, 2050)
-plotted_years <- c(2025, 2030, 2035)
+plotted_years <- c(2030, 2040, 2050)
+# plotted_years <- c(2025, 2030, 2035)
 # plotted_regions <- c("JPN","CAZ")
 plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
 # plotted_regions <- c('CHA', 'IND') 
@@ -81,7 +81,8 @@ component_names <- tribble(
   "fesos",         "Solids",        "#76512c",
   "fegas",         "Non-H2 Gases",  "#85b3dd",
   "eafscrap",      "EAF Scrap",         "#a45353",
-  "bofscrap",      "BOF Scrap",     "#9f5b5b",
+  # "bofscrap",      "BOF Scrap",     "#9f5b5b",
+  "bofscrap",      "BOF Scrap",     "#fe0404",
   "ironore",       "Iron Ore",      "#7e433d",
   "dripell",       "DRI Pellets",   "#7d2222",
   "OPEX",          "OPEX",          "#cccccc",
@@ -172,7 +173,8 @@ df.FeEmiCost <- df.priceCO2 %>%
 
 #### OPTION2: take price differentiated by SE, then take weighted sum according to SE shares.
 df.priceFuel <- as.quitte(readGDX(gdx, "p_FEPrice_by_SE_Sector_EmiMkt", restore_zeros = F)) %>%
-  filter(sector == "indst", emiMkt == "ETS", value > 0., period %in% t) %>%
+  # filter(sector == "indst", emiMkt == "ETS", value > 0., period %in% t) %>%
+  filter(sector == "indst", emiMkt == "ETS", period %in% t) %>%
   select(region, period, entySe, all_enty, value) %>%
   rename(entySE = entySe, entyFE = all_enty, priceFuel = value)
 df.demFETotal = df.demFe  %>% 
@@ -191,14 +193,12 @@ df.priceFuel <- df.priceFuel %>%
   ungroup
 
 
-#up to here, df.priceFuel is kind of correct. It fluctuates quite a lot, but seems coherent
-
 # Subtract FE tax from fuel price
-## currently not using! Using only FE prices, no CO2
-# df.priceFuel <- df.priceFuel %>%
-#   left_join(df.FeEmiCost, by=c("region", "period", "entyFE")) %>%
-#   mutate(priceFuel = priceFuel - ifelse(is.na(FeEmiCost), 0., FeEmiCost)) %>%
-#   select(-FeEmiCost)
+## comment out if you want to use only FE prices, no CO2
+df.priceFuel <- df.priceFuel %>%
+  left_join(df.FeEmiCost, by=c("region", "period", "entyFE")) %>%
+  mutate(priceFuel = priceFuel - ifelse(is.na(FeEmiCost), 0., FeEmiCost)) %>%
+  select(-FeEmiCost)
 
 df.specFeDem <- as.quitte(readGDX(gdx,name=c("pm_specFeDem"),format="first_found",restore_zeros = F)) %>% 
   filter(value > 0., period %in% t) %>%
@@ -385,8 +385,8 @@ df.CAPEX <- df.CAPEX %>%
 lcop <- bind_rows(df.costMat, 
                   df.costFuel,
                   #df.costInj,
-                  #currently not including Co2 prices
-                  #df.costCO2,
+                  # comment out below if not wanting to show Co2 prices
+                  df.costCO2,
                   df.CAPEX,
                   df.OPEX
                   )
@@ -514,7 +514,9 @@ lcop_avg <- lcop_avg %>%
 ###################################################
 # PREPARE FOR PLOTTING
 
-lcop_plot <- lcop_avg %>%
+## uncomment if you want to plot average lcop value over plant lifetime
+# lcop_plot <- lcop_avg %>%
+lcop_plot <- lcop %>%
   left_join(route_names, by="route") %>% 
   select(-route) %>% 
   rename(route = route_name) %>%
@@ -745,5 +747,184 @@ p.drieaf <- ggplot() +
 
 p.drieaf
 
+
+```
+```{R}
+
+###################################################
+# PREPARE FOR PLOTTING
+
+#HERE: calculate average lcop for PRIMARY steel (ie weighted by route)
+
+
+#tePrc2route
+df.outflowPrc <- as.quitte(readGDX(gdx, "vm_outflowPrc", field = "l", restore_zeros = F)[,t,]) %>%
+    filter(all_te %in% tePrcAll) %>%
+    select(region, period, all_te, value, opmoPrc) %>%
+    rename(outflowPrc = value) %>%
+    # left_join(tePrc2route, by = c("all_te", "opmoPrc")) %>% 
+    left_join(o37_relativeOutflow, by=c("region", "period", "all_te", "opmoPrc")) %>% 
+    mutate(value = outflowPrc / relativeOutflow)
+
+#calculate production fractions
+
+# eaf_techs <- c("bf", "idr")
+ccs_techs <- list(c("bf", "bfcc"), c("idr", "idrcc"))
+steel_techs <- c("bof", "eaf")
+
+#precompute values
+ccs_lookup <- df.outflowPrc %>%
+  #h2 dri does not have ccs, keep only ng
+  filter(opmoPrc != "h2") %>%
+  group_by(region, period, all_te) %>%
+  summarize(value = sum(value)) %>%
+  filter(all_te %in% unlist(ccs_techs)) %>%
+  pivot_wider(names_from = all_te, values_from = value, values_fill = 0.) %>%
+  rename(bf_val = bf, 
+         bfcc_val = bfcc, 
+         idr_val = idr, 
+         idrcc_val = idrcc) %>%
+  select(region, period, bf_val, bfcc_val, idr_val, idrcc_val) %>% 
+  #drop dupplicates
+  distinct(region, period, .keep_all = TRUE)
+
+#calculate production fractions
+df.prod_frac <- df.outflowPrc %>% 
+  left_join(ccs_lookup, by=c("region", "period")) %>%
+  group_by(region,period) %>%
+  mutate(
+    eaf_sum = sum(value[all_te == "idr"]),
+    steel_sum = sum(value[all_te %in% steel_techs]),
+    # for idr, there are two operational possibilites: h2 and ng. Then, ccs comes on top
+    iron_frac = ifelse(all_te == "idr", value / eaf_sum, 1.),
+    iron_frac = ifelse(is.na(iron_frac), 0., iron_frac), # in case of no idr production, set to 0.
+
+    steel_frac = ifelse(all_te %in% steel_techs, value / steel_sum, 1.),
+    ccs_frac = case_when(
+      all_te == "bf" ~ 1 - (bfcc_val / bf_val),
+      all_te == "idr" & opmoPrc != "h2"  ~  1-  (idrcc_val/idr_val),
+      all_te == "bfcc" ~ (bfcc_val / bf_val),
+      all_te == "idrcc" ~ (idrcc_val/idr_val),
+      # most other techs have no ccs, so set to 1.  as we will multiply iron_frac and steel_frac with ccs_frac
+      TRUE ~ 1.
+    ),
+    ccs_frac = ifelse(is.na(ccs_frac), 0., ccs_frac) # in case of no ccs production, set to 0.
+    ) %>%
+  ungroup() %>% 
+  select(region, period, all_te, opmoPrc, value, iron_frac, steel_frac, ccs_frac) %>%
+  left_join(tePrc2route, by=c("all_te", "opmoPrc")) %>% 
+  filter(!(all_te == "bf"&route == "bfbof_ccs")) %>% #hack to count CCS tech fractions properly
+  filter(!(all_te == "idr" & route == "idreaf_ng_ccs"))%>% #hack to count CCS tech fractions properly
+  mutate(frac = iron_frac * steel_frac * ccs_frac) %>%
+  group_by(region, period, route) %>%
+  # multiply ccs component with iron and steel component to get total route production factor
+  summarise(frac = prod(frac))
+
+
+lcop_weighted <- lcop %>%
+  left_join(df.prod_frac, by=c("region", "period", "route")) %>%
+  mutate(value = value * frac)  %>%
+  select(-frac)
+
+lcop_plot <- lcop_weighted %>%
+  left_join(route_names, by="route") %>% 
+  select(-route) %>% 
+  rename(route = route_name) %>%
+  left_join(component_names, by="component") %>%
+  select(-component) %>%
+  rename(component = component_name) %>%
+  group_by(period, region, component, route) %>%
+  summarize(value = sum(value), color=first(color)) %>%
+  ungroup %>%
+  mutate(value = pmax(value, 0.)) # sweep negative prices under the rug
+
+
+### continue with lcop plot
+
+lcop_plot$component <- factor(lcop_plot$component, levels=unique(component_names$component_name))
+
+plotted_years1 <- c(2025, 2030, 2035, 2040, 2045, 2050, 2055)
+
+lcop_plot <- lcop_plot %>%
+  filter(region %in% plotted_regions, period %in% plotted_years1) %>% 
+  # mutate(route_id = route %>% as.factor() %>% as.numeric()) %>% 
+  # mutate(year_id = period %>% as.factor() %>% as.numeric()) %>% 
+  # mutate(n_routes = max(route_id)) %>%
+  # mutate(year_label_pos = (n_routes+2) * year_id) %>% 
+  # mutate(pos = year_label_pos + route_id - (n_routes+1)/2.) %>% 
+  # select(-year_id, -route_id, -n_routes) %>%
+  left_join(region_names, by="region") %>% 
+  select(-region) %>% 
+  rename(region = region_name) %>%
+  mutate(region = factor(region, levels=unique(region_names$region_name))) 
+
+# route_label <- lcop_plot %>% 
+#   select(route, pos, region) %>% 
+#   unique()
+
+# year_label <- lcop_plot %>% 
+#   select(period, year_label_pos, region) %>% 
+#   unique()
+
+# routes = unique(route_names$route_name)
+
+
+  
+
+# xmin <- min(lcop_plot$pos) - 1.
+# xmax <- max(lcop_plot$pos) + 1.
+
+
+###################################################
+# VARIABLE FILTER:
+### setting some inputs and regions  to zero allows to build up plots step by step in presentations
+
+  
+component_names <- component_names %>%
+  filter(color %in% unique(lcop_plot$color))
+
+
+# comp_non_zero = c("Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
+# comp_non_zero = c("Electricity", "Hydrogen", "Non-H2 Gases", "Liquids", "Solids", "Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
+comp_non_zero = c("Emission Cost", "Electricity", "Hydrogen", "Non-H2 Gases", "Liquids", "Solids", "Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
+
+# regi_non_zero = c("EU")
+# regi_non_zero = c("EU", "China", "USA")
+regi_non_zero = c("EU", "China", "USA", "India")
+
+lcop_plot <- lcop_plot %>% 
+  filter(component %in% unique(component_names$component_name)) # %>%
+  # mutate(value = ifelse(region %in% regi_non_zero, value, 0.)) %>% 
+  # mutate(value = ifelse(component %in% comp_non_zero, value, 0.))
+
+
+#currently no prices plot
+# priceSteel_plot <- priceSteel_plot %>%
+#   filter(region %in% regi_non_zero)
+
+###################################################
+# PLOT
+
+p.lcop <- ggplot() +
+  geom_bar(data=lcop_plot, position="stack", stat="identity",
+           aes(x = period, y = value, fill=component)) +
+  # xlim(xmin, xmax) +
+  # ylim(-601.,1390) +
+  facet_wrap(~region) +
+  scale_fill_manual(values=unique(component_names$color)) +
+  # geom_text(data=year_label, aes(label = period), x = year_label$year_label_pos, y = -600., size = fs/2.5, parse = T) +
+  # geom_point(data=priceSteel_plot, aes(x = pos, y = price, shape=shape)) +
+  theme(text=element_text(size=fs),
+        # axis.title.x=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.ticks.x=element_blank(),
+        axis.text.y=element_text(size=fs),
+        strip.text = element_text(size = 1.2 * fs)) +
+  labs(y = "LCOP [$/t]", fill="Cost Component",
+      x = "Period", title = "Average levelized cost of steel, weighted by production route (Green policy 650)")
+
+# ggsave(filename = "all_routes.png", width = 12, height = 6, device='png', dpi=300)
+
+p.lcop
 
 ```
