@@ -510,9 +510,19 @@ calc_cumulative_costs <- function(df, start_year, end_year) {
   )
 
   full_df <- df_expanded %>%
-    left_join(df, by = c("region", "period", "component", "scenario")) %>%
+    left_join(df, by = c("region", "period", "component", "scenario"))
+
+  #test: raise error if more than one period has na value (for up to 2070, expect 1 na period, 2065)
+  na_df <- full_df %>% filter(is.na(value))
+  if (length(unique(na_df$period)) > 1) {
+    print(unique(na_df$period))
+    stop("There are more NA values than expected in the data frame.")
+  }
+
+  full_df <- full_df %>%
     group_by(region, component, scenario) %>%
     arrange(period) %>%
+    # if NA (should only be for 2065) use lead value to fill time step that is not calculated
     mutate(value = ifelse(is.na(value), lead(value), value)) %>%
     #since the variables are defined such that 2070 = between 2067.5 and 2072.5, we multiply the value by 2.5 for the last year step
     # to get the cumulative value until end_year, not end_year + 2.5
@@ -627,11 +637,274 @@ calc_total_costs <- function(gdx, scenario_name, include_co2_price = TRUE, start
   return(list(yearly = df.totalcosts, cumu = df.cumulativecosts))
 }
 ```
+
+```{R calc investments}
+
+# calc_total_investments <- function(gdx) {
+  #calculate additional electrolyser investments required for the steel sector
+
+# only works for the short term (up to 2050-2055) as we do not account for lifetime of investments
+
+# calculate h2 demand from the steel sector
+# specFeDem is given in TWa/Gt.
+df.specFeDemH2 <- as.quitte(readGDX(gdx,name=c("pm_specFeDem"),format="first_found",restore_zeros = F)) %>% 
+  filter(value > 0., period %in% t, all_enty == "feh2s") %>%
+  select(region, period, all_enty, all_te, opmoPrc, value) %>%
+  rename(entyFE = all_enty, specFeDem = value)
+
+
+df.specFeDemEl <- as.quitte(readGDX(gdx,name=c("pm_specFeDem"),format="first_found",restore_zeros = F)) %>% 
+  filter(value > 0., period %in% t, all_enty == "feels", opmoPrc != "sec") %>%
+  filter(all_te %in% c("idr", "eaf")) %>%
+  select(region, period, all_enty, all_te, opmoPrc, value) %>%
+  rename(entyFE = all_enty, specFeDem = value)
+
+# get yearly production, Gt/a. outflowPrc (2005) is the avg production between 2002.5 and 2007.5
+df.outflowPrc <- as.quitte(readGDX(gdx, "vm_outflowPrc", field = "l", restore_zeros = F)[,t,]) %>%
+  filter(all_te %in% tePrcAll) %>%
+  select(region, period, all_te, value, opmoPrc) %>%
+  rename(outflowPrc = value)
+
+## CALC STEEL CAPEX
+
+# PART 1: DRI and EAF
+#for dri and primary EAF
+# get yearly production, Gt/a. outflowPrc (2005) is the avg production between 2002.5 and 2007.5
+df.outflowPrc_prdri <- df.outflowPrc %>%
+  filter((all_te == "idr")|(all_te == "eaf"), opmoPrc != "sec") %>%
+  # summarise to calculate total volume of DRI iron produced (both ng and h2)
+  # they must both be accounted for in the calculation
+  group_by(region, period, all_te) %>%
+  summarise(outflowPrc = sum(outflowPrc)) %>%
+  ungroup()
+
+#get steel capacity factors
+df.capfac_steel <- as.quitte(readGDX(gdx, "vm_capFac", field = "l", restore_zeros = F)[,t,]) %>%
+  filter(all_te %in% tePrc) %>%
+  select(region, period, all_te, value) %>%
+  rename(capFac = value)
+
+# calculate DRI-H2 CAPEX + EAF CAPEX for the capacity required for H2-DRI
+#in USD/t capacity
+df.CAPEX_steel <- as.quitte(readGDX(gdx, "vm_costTeCapital", field = "l", restore_zeros = F)[,t,tePrcAll]) %>%
+    select(region, period, all_te, value) %>%
+    filter(all_te %in% c("idr", "eaf", "bf", "bof", "bfcc")) %>%
+    rename(capex = value)
+
+
+
+df.Inv_steel <- df.outflowPrc_prdri %>%
+  left_join(df.capfac_steel, by = c("region", "period", "all_te")) %>%
+  mutate(steelcap = outflowPrc / capFac) %>%
+  group_by(region, all_te) %>%
+  arrange(period) %>%
+  mutate(steelexistingcap = steelcap) %>%
+  # mostly necessary for US: fill in missing values when H2 is not used for some time steps
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,2), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,3), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,4), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(is.na(steelexistingcap), 0, steelexistingcap)) %>%
+  #calculate required electrolysis additions (disreguard years requiring less H2)
+  mutate(deltacap = steelexistingcap - lag(steelexistingcap)) %>%
+  mutate(deltacap = ifelse(is.na(deltacap), 0, deltacap)) %>%
+  mutate(deltacap = ifelse(deltacap < 0, 0, deltacap)) %>%
+  select(region, all_te, period, deltacap) %>%
+  ungroup() %>%
+  mutate(component = "Steel CAPEX (dri-eaf)") %>%
+  left_join(df.CAPEX_steel, by = c("region","period", "all_te")) %>%
+  mutate(value = deltacap * capex) %>%
+  select(region, period, value, all_te, component) %>%
+  group_by(region, period, component) %>%
+  summarise(value = sum(value)) %>% 
+  ungroup()
+
+#PART 2: BF, BOF and BF-CCS
+df.outflowPrc_prfossil <- df.outflowPrc %>%
+  filter(all_te %in% c("bf", "bof", "bfcc")) %>%
+  group_by(region, period, all_te) %>%
+  summarise(outflowPrc = sum(outflowPrc)) %>%
+  ungroup()
+
+df.Inv_steel_fossil <- df.outflowPrc_prfossil %>%
+  left_join(df.capfac_steel, by = c("region", "period", "all_te")) %>%
+  mutate(steelcap = outflowPrc / capFac) %>%
+  group_by(region, all_te) %>%
+  arrange(period) %>%
+  mutate(steelexistingcap = steelcap) %>%
+  # mostly necessary for US: fill in missing values when H2 is not used for some time steps
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,2), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,3), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(steelexistingcap == 0., lag(steelexistingcap,4), steelexistingcap)) %>%
+  mutate(steelexistingcap = ifelse(is.na(steelexistingcap), 0, steelexistingcap)) %>%
+  #calculate required electrolysis additions (disreguard years requiring less H2)
+  mutate(deltacap = steelexistingcap - lag(steelexistingcap)) %>%
+  # initialisation issue: for 2010 so doesn't matter much.
+  mutate(deltacap = ifelse(is.na(deltacap), ifelse(steelexistingcap != 0, steelexistingcap, 0), deltacap)) %>%
+  mutate(deltacap = ifelse(deltacap < 0, 0, deltacap)) %>%
+  # select(region, all_te, period, deltacap) %>%
+  ungroup() %>%
+  mutate(component = "Steel CAPEX (bf-bof and\nbf-bof-ccs)") %>% 
+  left_join(df.CAPEX_steel, by = c("region","period", "all_te")) %>%
+  mutate(value = deltacap * capex) %>%
+  select(region, period, value, all_te, component) %>%
+  group_by(region, period, component) %>%
+  summarise(value = sum(value)) %>% 
+  ungroup()
+
+
+##### NOW, H2 CAPEX: ELECTROLYSIS + ELECTRICTY FOR ELECTROLYSIS
+# calc H2 dem in TWa/a (avg demand between 2002.5 and 2007.5)
+df.FeDemH2 <- df.specFeDemH2 %>%
+  left_join(df.outflowPrc, by=c("region", "period", "all_te", "opmoPrc")) %>%
+  mutate(h2dem = specFeDem * outflowPrc) %>%
+  filter(period <= 2055, period >= 2020) %>%
+  select(region, period, h2dem, entyFE)
+
+# electrolyser capfac to calculate overall electrolysis capacity required
+df.elh2capfac <- as.quitte(readGDX(gdx, "vm_capFac", field = "l", restore_zeros = F)[,t,]) %>%
+  filter(all_te == "elh2") %>%
+  select(region, period, value) %>%
+  rename(capFac = value)
+
+# eta, electrolyser efficiency
+# use to calculate electricity demand from H2 demand
+df.eta <- as.quitte(readGDX(gdx, "pm_eta_conv", restore_zeros = F)[,t,]) %>%
+    filter(all_te == "elh2", value > 0.) %>%
+    select(region, period, value) %>%
+    rename(eta = value)
+
+df.elDem_elh2 <- df.FeDemH2 %>%
+  left_join(df.eta, by=c("region", "period")) %>%
+  mutate(eldem = h2dem / eta) %>%
+  select(region, period, eldem)
+
+# FLH given in pm_dataren * pm_cf (but pm_cf is basically 1 everywhere. Except for some periods in China for whatever reason)
+df.capfac_el <- as.quitte(readGDX(gdx, "pm_dataren", restore_zeros = F)[,,,]) %>%
+  select(region, value, char, rlf, all_te) %>%
+  filter(char == "nur", all_te == "spv", rlf == 1) %>%
+  rename(capfac = value)
+
+
+# PART1: ELECTROLYSIS CAPEX
+# merge dfs and calculate elh2 (capacity) required before calculating the required capacity additions
+df.totalH2dem <- df.FeDemH2 %>%
+  left_join(df.elh2capfac, by=c("region", "period")) %>%
+  mutate(elh2cap_required = h2dem / capFac) %>%
+  group_by(region) %>%
+  arrange(period) %>%
+  mutate(elh2existingcap = elh2cap_required) %>%
+  # mostly necessary for US: fill in missing values when H2 is not used for some time steps
+  mutate(elh2existingcap = ifelse(elh2existingcap == 0., lag(elh2existingcap), elh2existingcap)) %>%
+  mutate(elh2existingcap = ifelse(elh2existingcap == 0., lag(elh2existingcap,2), elh2existingcap)) %>%
+  mutate(elh2existingcap = ifelse(elh2existingcap == 0., lag(elh2existingcap,3), elh2existingcap)) %>%
+  mutate(elh2existingcap = ifelse(elh2existingcap == 0., lag(elh2existingcap,4), elh2existingcap)) %>%
+  mutate(elh2existingcap = ifelse(is.na(elh2existingcap), 0, elh2existingcap)) %>%
+  #calculate required electrolysis additions (disreguard years requiring less H2)
+  mutate(deltacap = elh2existingcap - lag(elh2existingcap)) %>%
+  mutate(deltacap = ifelse(is.na(deltacap), 0, deltacap)) %>%
+  mutate(deltacap = ifelse(deltacap < 0, 0, deltacap)) %>%
+  select(region, period, deltacap) %>%
+  ungroup() %>% 
+  mutate(all_te = "elh2",
+        component = "Electrolysis CAPEX")
+
+# PART 2: ELECTRICITY CAPEX FOR ELECTROLYSIS
+# merge dfs and calculate spv (capacity) required for electrolysis
+# then, calculate the required capacity additions
+df.elDem_elh2 <- df.elDem_elh2 %>%
+  left_join(df.capfac_el, by=c("region")) %>%
+  mutate(cap_el = eldem / capfac) %>%
+  select(region, period, cap_el) %>%
+  group_by(region) %>%
+  arrange(period) %>%
+  mutate(cap_el_required = cap_el) %>%
+  # mostly necessary for US: fill in missing values when H2 is not used for some time steps
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,2), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,3), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,4), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(is.na(cap_el_required), 0, cap_el_required)) %>%
+  #calculate required electrolysis additions (disreguard years requiring less H2)
+  mutate(deltacap = cap_el_required - lag(cap_el_required)) %>%
+  mutate(deltacap = ifelse(is.na(deltacap), 0, deltacap)) %>%
+  mutate(deltacap = ifelse(deltacap < 0, 0, deltacap)) %>%
+  ungroup() %>%
+  select(region,period, deltacap) %>%
+  mutate(all_te = "spv",
+        component = "Electricity CAPEX (for electrolysis)")
+
+# get the CAPEX for elh2
+# in USD/(W/a) capacity?? So divided by 1000 relative to generisdatatech.
+# multiplied by TW => tr USD units
+df.CAPEX <- as.quitte(readGDX(gdx, "vm_costTeCapital", field = "l", restore_zeros = F)[,t,]) %>%
+# TODO: filter for spv as well
+  filter((all_te == "elh2") | (all_te == "spv")) %>%
+  select(region, period, all_te, value) %>%
+  rename(capex = value)
+
+# combine electricity and hydrogen investment requirements
+# calculate total investment costs 
+# vm_cap should be in TW. so final cost unit here is in trUSD
+df.Inv_el_h2 <- df.elDem_elh2 %>% 
+  bind_rows(df.totalH2dem) %>% 
+  left_join(df.CAPEX, by=c("region", "period", "all_te")) %>%
+  mutate(value = deltacap * capex) %>%
+  select(region, period, value, component)
+
+#### NOW: OTHER ELEC DEMAND (EAF + IDR)
+
+df.elDem <- df.specFeDemEl %>%
+  left_join(df.outflowPrc, by = c("region", "period","all_te", "opmoPrc")) %>%
+  mutate(dem = specFeDem * outflowPrc) %>%
+  group_by(region, period, entyFE) %>%
+  summarise(eldem = sum(dem))
+
+# merge dfs and calculate spv (capacity) required for electrolysis
+# then, calculate the required capacity additions
+df.elDem <- df.elDem %>%
+  left_join(df.capfac_el, by=c("region")) %>%
+  mutate(cap_el = eldem / capfac) %>%
+  select(region, period, cap_el) %>%
+  group_by(region) %>%
+  arrange(period) %>%
+  mutate(cap_el_required = cap_el) %>%
+  # mostly necessary for US: fill in missing values when H2 is not used for some time steps
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,2), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,3), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(cap_el_required == 0., lag(cap_el_required,4), cap_el_required)) %>%
+  mutate(cap_el_required = ifelse(is.na(cap_el_required), 0, cap_el_required)) %>%
+  #calculate required electrolysis additions (disreguard years requiring less H2)
+  mutate(deltacap = cap_el_required - lag(cap_el_required)) %>%
+  mutate(deltacap = ifelse(is.na(deltacap), 0, deltacap)) %>%
+  mutate(deltacap = ifelse(deltacap < 0, 0, deltacap)) %>%
+  ungroup() %>%
+  select(region,period, deltacap) %>%
+  mutate(all_te = "spv",
+        component = "Electricity CAPEX (other)")
+
+df.Inv_el <- df.elDem %>% 
+  left_join(df.CAPEX, by=c("region", "period", "all_te")) %>%
+  mutate(value = deltacap * capex) %>%
+  select(region, period, value, component)
+
+df.total_Inv <- df.Inv_steel %>%
+  bind_rows(df.Inv_steel_fossil) %>%
+  bind_rows(df.Inv_el_h2) %>%
+  bind_rows(df.Inv_el)
+
+  # return(df.total_Inv)
+#}
+
+
+```
 ```{r load gdx}
 gdx <- "inputdata/gdx/650_govtargets.gdx"
 ```
 
-```{r load sets}
+```{R load sets}
 #define sets required (they are the same across all gdx files)
 tePrc <- readGDX(gdx,"tePrc")
 tePrcAll <- tePrc
@@ -645,16 +918,17 @@ t <- readGDX(gdx,"ttot")
 t <- as.numeric(t[t >= 2010 & t <= 2100])
 ```
 
-```{r calculate costs}
+```{R calculate costs}
 # greenpol <- "inputdata/gdx/GreenPolicyEarlyReti-PkBudg650.gdx"
 # base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
 
-greenpol <- "inputdata/gdx/GreenPolicyEarlyReti_regPol-PkBudg1000.gdx"
-base <- "inputdata/gdx/PolicyExtended_regPol-PkBudg1000.gdx"
+greenpol <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
+# base <- "inputdata/gdx/GreenPolicy-NPi.gdx"
+base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
 #calculate costs
-df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = TRUE, start_year = 2025, end_year = 2070)
 
-df.totalcosts2 <- calc_total_costs(base, scenario_name = "base", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+df.totalcosts2 <- calc_total_costs(base, scenario_name = "polextended", include_co2_price = TRUE, start_year = 2025, end_year = 2070)
 
 # print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
 
@@ -683,10 +957,9 @@ plot_df <- df.totalcosts %>%
   mutate(period = as.numeric(period)) %>% 
   select(-greenpol, - base)
 
-# print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
 ```
 
-```{r plot costs}
+```{R plot costs}
 
 component_order <- c("CAPEX", "OPEX","Materials", "Energy costs")
 
@@ -729,7 +1002,8 @@ global_plot <- ggplot(plot_df_global, aes(x = period, y = diff_scenarios, fill =
   #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
   facet_wrap(~ region, scales = "free_y") +
   labs(
-    title = "Cumulative cost difference between the green policy and base scenarios\nfor the well-below 2°C target scenarios with regional net-zero targets",
+    # title = "Cumulative cost difference between the green policy and NPi scenarios\nfor the well-below 2°C target scenarios with regional net-zero targets",
+    title = "Cumulative cost difference between GreenPol and PolExtended\nfor 650PkBudget",
     x = "Year",
     y = "Cumulative cost difference\n(trUSD)",
     fill = "Component"
@@ -743,28 +1017,34 @@ global_plot <- ggplot(plot_df_global, aes(x = period, y = diff_scenarios, fill =
   ) +
   #add arrow at 2020 and annotation
   annotate("segment", x = 2025, xend = 2025, y = 0, yend = max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
-  geom_text(aes(x = 2029, y = max(plot_df_global$diff_scenarios) * 0.9, label = "Green policy more expensive\nthan base transition"), color = "#797777", size = 4, hjust =0.3) +
-  annotate("segment", x = 2025, xend = 2025, y = 0, yend = -max(plot_df_global$diff_scenarios)*3, arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
-  geom_text(aes(x = 2029, y = -max(plot_df_global$diff_scenarios) * 2.5, label = "Green policy less expensive\nthan base transition"), color = "#797777", size = 4, hjust =0.3)
+  geom_text(aes(x = 2029, y = max(plot_df_global$diff_scenarios) * 0.9, label = "GreenPol more expensive\nthan PolExt"), color = "#797777", size = 4, hjust =0.3) +
+  annotate("segment", x = 2025, xend = 2025, y = 0, yend = -max(plot_df_global$diff_scenarios)*3.6, arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
+  geom_text(aes(x = 2029, y = -max(plot_df_global$diff_scenarios) * 3.3, label = "GreenPol less expensive\nthan PolExt"), color = "#797777", size = 4, hjust =0.3)
 
 final_plot <- gridExtra::grid.arrange(global_plot,region_plot,  ncol = 1)
 
 print(final_plot)
 #save
-# ggsave("figs_temp/costs_greenpol_vs_base_1000_reg.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+ggsave("figs_temp/costs_greenpol_vs_polextended_650.png", plot = final_plot, width = 10, height = 12, dpi = 300)
 # ggsave("figs_temp/costs_greenpol_vs_NPi_1000_reg.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+# ggsave("figs_temp/costs_greenpol_1000_vs_NPi.png", plot = final_plot, width = 10, height = 12, dpi = 300)
 ```
 
-```{r calculate costs}
+```{R calculate investment costs}
 
-greenpol <- "inputdata/gdx/GreenPolicyEarlyReti-PkBudg650.gdx"
-npi <- "inputdata/gdx/GreenPolicyEarlyReti-NPi.gdx"
+greenpol <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
+base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
+
 #calculate costs
-df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+df.totalcosts1 <- calc_total_investments(greenpol) %>%
+  filter(region == "IND") %>%
+  mutate(scenario = "Green policy")
 
-df.totalcosts2 <- calc_total_costs(npi, scenario_name = "npi", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
+df.totalcosts2 <- calc_total_investments(base) %>%
+  filter(region == "IND") %>%
+  mutate(scenario = "Policy extended")
 
-# print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
+# print(df.totalcosts1 %>% filter(region == "IND"), n=Inf)
 
 # print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
 
@@ -772,31 +1052,22 @@ df.totalcosts2 <- calc_total_costs(npi, scenario_name = "npi", include_co2_price
 ```
 
 ```{R tests}
-df.totalcosts <- bind_rows(df.totalcosts1$cumu, df.totalcosts2$cumu) %>%
-  pivot_wider(names_from = scenario, values_from = cumulative_value) %>% 
-  mutate(diff_scenarios = `greenpol` - `npi`) %>%
-  mutate(perc_diff_scenarios = diff_scenarios / (`npi` + `greenpol`) * 100)
+df.totalcosts <- df.totalcosts1 %>%
+  bind_rows(df.totalcosts2) %>%
+  filter(period >= 2030, period <= 2050)
 
-df.totalcosts_aggr <- df.totalcosts %>%
-  group_by(region, period) %>%
-  summarise(total_greenpol = sum(greenpol),
-            total_npi = sum(npi)) %>%
-  mutate(diff_scenarios = total_greenpol - total_npi) %>%
-  mutate(perc_diff_scenarios = diff_scenarios / (total_npi + total_greenpol) * 100) %>% 
-  select(-total_greenpol, -total_npi)
 
 plot_df <- df.totalcosts %>%
-  filter(region %in% plotted_regions) %>%
   mutate(region = factor(region, levels = plotted_regions, labels = region_names$region_name)) %>%
-  mutate(period = as.numeric(period)) %>% 
-  select(-greenpol, - npi)
+  mutate(period = as.numeric(period)) %>%
+  mutate(value = value * 1000) #convert to billion USD 
 
 # print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
 ```
 
-```{r plot costs}
+```{R plot costs}
 
-component_order <- c("CAPEX", "OPEX","Materials", "Energy costs")
+component_order <- c("Electricity CAPEX (other)","Electricity CAPEX (for electrolysis)", "Electrolysis CAPEX", "Steel CAPEX (dri-eaf)", "Steel CAPEX (bf-bof and\nbf-bof-ccs)")
 
 plot_df <- plot_df %>%
   mutate(
@@ -804,63 +1075,41 @@ plot_df <- plot_df %>%
     component = factor(component, levels = component_order)
   )
 
-
-#filter global and non global results
-plot_df_global <- plot_df %>% filter(region == "Global")
-plot_df_others <- plot_df %>% filter(region != "Global")
-
+component_colors <- c(
+  "Electricity CAPEX (other)" = "#fad231",
+  "Electricity CAPEX (for electrolysis)" = "#da9e06",
+  "Electrolysis CAPEX" = "#99CCFF",
+  "Steel CAPEX (dri-eaf)" = "#33eea3",
+  "Steel CAPEX (bf-bof and\nbf-bof-ccs)" = "#606060"
+)
 
 # Area plot
-region_plot <- ggplot(plot_df_others, aes(x = period, y = diff_scenarios, fill = component)) +
-  geom_area(position = "stack", alpha = 0.5) +
-  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
-  # to add a smooth line on top
-  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
-  facet_wrap(~ region, scales = "free_y") +
+region_plot <- ggplot() +
+  geom_bar(data = plot_df,
+          aes(x = period, y = value, fill = factor(component)),
+          position = "stack", 
+          stat="identity", 
+          width=3,
+          alpha = 1) +
+  scale_fill_manual(values = component_colors) +
+  facet_wrap(~ scenario, nrow = 2) +
   labs(
-    title = "",
+    title = "Investment costs for India, for a `Policy Extended` and `Green\npolicy push` scenario for 1.5° target with overshoot",
     x = "Year",
-    y = "Cumulative cost difference\n(trUSD)",
+    y = "Investment costs\n(Bill. USD)",
     fill = "Component"
   ) +
-  theme_minimal(base_size = 14) +
+  guides(fill=guide_legend(nrow=3)) +
+  theme_bw(base_size = 14) +
   theme(
     panel.grid.minor = element_blank(),
     strip.text = element_text(face = "bold"),
     legend.position = "bottom",
-  )
+  ) 
+region_plot
 
-global_plot <- ggplot(plot_df_global, aes(x = period, y = diff_scenarios, fill = component)) +
-  geom_area(position = "stack", alpha = 0.5) +
-  stat_summary(aes(group = 1),fun = sum, geom = "line", color = "black", size = 1) +
-  # to add a smooth line on top
-  #geom_smooth(aes(color = component), method = "loess", se = FALSE, size = 0.8, linetype = "dashed") +
-  facet_wrap(~ region, scales = "free_y") +
-  labs(
-    title = "Cumulative cost difference between the green policy runs\n between an NPi and a 1.5°C target scenario",
-# title = "Cumulative cost difference between the green policy runs\n between an NPi and a well-below 2°C target scenario",
-    x = "Year",
-    y = "Cumulative cost difference\n(trUSD)",
-    fill = "Component"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.grid.minor = element_blank(),
-    strip.text = element_text(face = "bold"),
-    legend.position = "none",
-    plot.margin=unit(c(1,1,-0.5,1), "cm")
-  ) +
-  #add arrow at 2020 and annotation
-  annotate("segment", x = 2025, xend = 2025, y = 0, yend = max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
-  geom_text(aes(x = 2029, y = max(plot_df_global$diff_scenarios) * 0.7, label = "Climate target\nscenario more expensive\nthan NPi"), color = "#797777", size = 4, hjust =0.3) +
-  annotate("segment", x = 2025, xend = 2025, y = 0, yend = -max(plot_df_global$diff_scenarios), arrow = arrow(length = unit(0.2, "cm")), color = "#797777")+
-  geom_text(aes(x = 2029, y = -max(plot_df_global$diff_scenarios) * 0.7, label = "Climate target\nscenario less expensive\nthan NPi"), color = "#797777", size = 4, hjust =0.3)
-
-final_plot <- gridExtra::grid.arrange(global_plot,region_plot,  ncol = 1)
-
-print(final_plot)
 #save
-ggsave("figs_temp/costs_greenpol_NPi_vs_650.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+ggsave("figs_temp/investment_costs.png", plot = region_plot, width = 8, height = 13, dpi = 300)
 ```
 
 
