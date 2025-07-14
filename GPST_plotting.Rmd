@@ -3,7 +3,7 @@ title: "BOF Steel-making Capacity Plot"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{R setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # install.packages("ggplot2")
 
@@ -16,18 +16,22 @@ require(gridExtra)
 
 ```
 
-```{r readdata}
+```{R readdata}
 raw_data <- read.csv("inputdata/gspt/global_BOFcap.csv")
 
 raw_age_data <- read.csv("inputdata/gspt/age_distribution.csv")
 
 raw_age_data_region <- read.csv("inputdata/gspt/age_distribution_regions.csv")
 
-df_production <- read.csv("inputdata/gspt/production.csv")
+df_production_bof <- read.csv("inputdata/worldsteel/bof_production.csv")
+df_production_other <- read.csv("inputdata/worldsteel/other_production.csv")
+df_production_eaf <- read.csv("inputdata/worldsteel/eaf_production.csv")
+
+raw_regional_data <- read.csv("inputdata/gspt/BOF_capacity_perREMINDregion.csv")
 
 ```
 
-```{r clean data}
+```{R clean data}
 clean_column_names <- function(name) {
   name <- gsub("\\.+", "_", name)
   name <- sub("_$", "", name)
@@ -83,10 +87,14 @@ age_data <- raw_age_data %>%
 age_data_region <- raw_age_data_region %>%
   rename_all(clean_column_names) %>%
   mutate(Total_BOF_capacity = Total_BOF_capacity / 1000)
+
+regional_data <- raw_regional_data %>%
+  rename_all(clean_column_names) %>%
+  select(Year, Region, Remaining_BOF_capacity, Total_BOF_capacity_additions, Total_BOF_capacity_additions_no_retirement_date, Yearly_BOF_Capacity_additions)
 ```
 
 
-```{r plot}
+```{R plot}
 
 data_long_filtered <- data_long %>%
   filter(Category %in% c("Total_net_existing_BOF_capacity",
@@ -130,7 +138,7 @@ p + geom_line(data = data_NetBOFcap, aes(x = factor(index), y = Capacity, group 
 #ggsave("figs/BOF_capacity_plot.png", width = 10, height = 6, dpi = 300)
 ```
 
-```{r plot2 capacity}
+```{R plot2 capacity}
 x_breaks <- seq(2000, 2080, by = 5)
 data_long_filtered <- data_long %>%
   filter(Category %in% c(
@@ -177,7 +185,7 @@ ggplot(data_long_filtered, aes(x = factor(index), y = Capacity, fill = Category)
 # ggsave("figs/BOF_capacity_plot_w2relining.png", width = 10, height = 6, dpi = 300)
 ```
 
-```{r calc emissions}
+```{R calc emissions}
 
 data_long_filtered_em <- data_long %>%
   filter(Category %in% c(
@@ -231,12 +239,19 @@ data_long_em_cumu$Category <- factor(data_long_em_cumu$Category,
 
 ```
 
-```{r plot emissions}
+```{R plot emissions}
 x_breaks <- seq(2020, 2075, by = 5)
+
+
+data_long_filtered_em <- data_long_filtered_em %>%
+  filter(Category != "Additional_cumulative_capacity_to_meet_gov_target")
+
+data_long_em_cumu <- data_long_em_cumu %>% 
+  filter(Category != "Cumu_oldBOF_new_govtargets")
 
 data_long_filtered_em$Category <- factor(data_long_filtered_em$Category, 
                             levels = c(
-                              "Additional_cumulative_capacity_to_meet_gov_target",
+                              # "Additional_cumulative_capacity_to_meet_gov_target",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction",  
                               "Additional_net_BOF_capacity_operating_1_relining",
@@ -245,14 +260,14 @@ data_long_filtered_em$Category <- factor(data_long_filtered_em$Category,
 p <- ggplot(data_long_filtered_em, aes(x = factor(index), y = Emissions, fill = Category)) +
   geom_bar(stat = "identity", data = data_long_filtered_em) +
   scale_fill_manual(values = c(
-                              "Additional_cumulative_capacity_to_meet_gov_target" = "#8420f0",
+                              # "Additional_cumulative_capacity_to_meet_gov_target" = "#8420f0",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction" = "#e41c7d",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only" = "#b11d36",
                               "Additional_net_BOF_capacity_operating_1_relining" = "grey",
                               "Total_net_existing_BOF_capacity" = "#454444"
                               ),
                     labels = c(
-                              "Additional_cumulative_capacity_to_meet_gov_target" = "Additional capacity if 2030 government\ntargets are met only with BF-BOFs",
+                              # "Additional_cumulative_capacity_to_meet_gov_target" = "Additional capacity if 2030 government\ntargets are met only with BF-BOFs",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction" = "New BF-BOF project\n(under construction)",
                               "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only" = "New BF-BOF project\n(announced)",
                               "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity, assuming\none BF relining (lifetime of 35 years)",
@@ -267,14 +282,14 @@ p <- p +
     values = c(
       "Cumu_oldBOF_1relining" = "grey",
       "Cumu_oldBOF_andnew" = "#b11d36",
-      "Cumu_oldBOF" = "#454444",
-      "Cumu_oldBOF_new_govtargets" = "#8420f0"
+      "Cumu_oldBOF" = "#454444" #,
+      # "Cumu_oldBOF_new_govtargets" = "#8420f0"
     ),
     labels = c(
       "Cumu_oldBOF_1relining" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if one\nBF relining takes place",
       "Cumu_oldBOF_andnew" = "Cumulative CO2 emissions from 2025,\nfrom operating, under construction and\nannounced BF-BOFs, if one BF relining\ntakes place",
-      "Cumu_oldBOF" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025",
-      "Cumu_oldBOF_new_govtargets" = "Cumulative CO2 emissions from 2025,\nfrom all BF-BOFs, if additional capacity\nis added to meet 2030 government\ntargets"
+      "Cumu_oldBOF" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025" #,
+      # "Cumu_oldBOF_new_govtargets" = "Cumulative CO2 emissions from 2025,\nfrom all BF-BOFs, if additional capacity\nis added to meet 2030 government\ntargets"
     )
   ) +
     scale_y_continuous( limits = c(0, 3000),
@@ -322,11 +337,11 @@ p <- p +
     yend = max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) / scale_factor
   ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
 
-  geom_segment(aes(
-    x = "2069", xend = "2069",
-    y = max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) / scale_factor, 
-    yend = max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_new_govtargets"]) / scale_factor
-  ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
+  # geom_segment(aes(
+  #   x = "2069", xend = "2069",
+  #   y = max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) / scale_factor, 
+  #   yend = max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_new_govtargets"]) / scale_factor
+  # ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
   
   annotate("text", x = "2069", y = (max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_1relining"]) + 
                                 max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF"])) / (2 * scale_factor), 
@@ -336,19 +351,20 @@ p <- p +
   annotate("text", x = "2069", y = (max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_1relining"]) + 
                                 max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"])) / (2 * scale_factor), 
            label = "Add planned\nand under\nconstruction\nBF-BOFs", hjust = 1.2,vjust = 0.4,
-            lineheight = 0.9, size = 3.2) +
+            lineheight = 0.9, size = 3.2) 
+            # +
   
-  annotate("text", x = "2069", y = (max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) + 
-                                max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_new_govtargets"])) / (2 * scale_factor),
-            label = "If 2030\ngovernment targets\nare reached using\nnew BF-BOFs",
-            hjust = 1.17, vjust = 0.7,
-            lineheight = 0.9, size = 3.2)
+  # annotate("text", x = "2069", y = (max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_andnew"]) + 
+  #                               max(data_long_em_cumu$Emissions[data_long_em_cumu$Category == "Cumu_oldBOF_new_govtargets"])) / (2 * scale_factor),
+  #           label = "If 2030\ngovernment targets\nare reached using\nnew BF-BOFs",
+  #           hjust = 1.17, vjust = 0.7,
+  #           lineheight = 0.9, size = 3.2)
 p
-#ggsave("figs/BOF_emissions_plot_1relinings.png", width = 11, height = 8, dpi = 300)
+ggsave("figs/BOF_emissions_plot_1relinings_nogovtargets.png", width = 11, height = 8, dpi = 300)
 ```
 
 
-```{r calc em test}
+```{R calc em test}
 
 data_long <- data_long %>%
   filter(Category %in% c(
@@ -408,7 +424,7 @@ data_wide_em_cumu <- data_wide_em %>%
 data_long_em_cumu <- data_wide_em_cumu %>%
   pivot_longer(cols = -index, names_to = "Category", values_to = "Emissions")
 ```
-```{r plot complex 2 relinings}
+```{R plot complex 2 relinings}
 
 #x ticks
 x_breaks <- seq(2020, 2080, by = 5)
@@ -540,13 +556,28 @@ p1
 # ggsave("figs/BOF_emissions_plot_2relinings.png", width = 11, height = 8, dpi = 300)
 ```
 
-```{r combine 1 and 2 relining plots}
+```{R combine 1 and 2 relining plots}
 
 grid.arrange(p, p1, ncol = 1, nrow = 2)
 g <- arrangeGrob(p, p1, ncol = 1, nrow = 2)
 ggsave("figs_temp/BOF_combine_relinings.png",g, width = 11, height = 12, dpi = 300)
 ```
-```{r plot age distribution, regions}
+```{R plot age distribution, regions}
+
+#### I THINK THIS GOES HERE
+#clean up age data df: missing ages are 0.
+complete_ages <- data.frame(Age = 0:173)
+age_data <- merge(complete_ages, age_data, by = "Age", all.x = TRUE)
+
+age_data$Number_of_plants[is.na(age_data$Number_of_plants)] <- 0
+age_data$Total_BOF_capacity[is.na(age_data$Total_BOF_capacity)] <- 0
+
+#calculate cumulative capacity (age data)
+cumu_cap_age <- age_data %>%
+  mutate(Cumu_Total_BOF_capacity = cumsum(Total_BOF_capacity)) %>%
+  mutate(Cumu_BOF_capacity_percent = Cumu_Total_BOF_capacity / sum(Total_BOF_capacity) * 100) %>%
+  select(Age, Cumu_Total_BOF_capacity, Cumu_BOF_capacity_percent)
+#####
 
 grouping =  5#years
 
@@ -710,55 +741,365 @@ ggplot(plot_data_long, aes(x = Age_Group, y = Capacity, fill = Type)) +
 # ggsave("figs/BOF_age_distribution_plot_wregions_cumu.png", width = 10, height = 6, dpi = 300)
 ```
 
-```{r calc production data}
-
-regions_to_filter <- c("USA", "EUR", "CHA", "IND", "OAS", "SSA", "REF", "NEU", "JPN")
-
-df_production_global <- df_production %>%
-  rename_all(clean_column_names) %>%
-  group_by(Historic_Time) %>%
-  summarise(
-    Global_steel_production = sum(value))
-
-df_production_regions <- df_production %>%
-  rename_all(clean_column_names) %>%
-  filter(Region %in% regions_to_filter)
-
-#clean up age data df: missing ages are 0.
-complete_ages <- data.frame(Age = 0:173)
-age_data <- merge(complete_ages, age_data, by = "Age", all.x = TRUE)
-
-age_data$Number_of_plants[is.na(age_data$Number_of_plants)] <- 0
-age_data$Total_BOF_capacity[is.na(age_data$Total_BOF_capacity)] <- 0
-
-#calculate cumulative capacity (age data)
-cumu_cap_age <- age_data %>%
-  mutate(Cumu_Total_BOF_capacity = cumsum(Total_BOF_capacity)) %>%
-  mutate(Cumu_BOF_capacity_percent = Cumu_Total_BOF_capacity / sum(Total_BOF_capacity) * 100) %>%
-  select(Age, Cumu_Total_BOF_capacity, Cumu_BOF_capacity_percent)
-
-```
-
-```{r plot regional production data}
+```{R calc regional capacity data}
 
 region_labels <- c(
   "CHA" = "China",
   "SSA" = "Sub-saharan Africa",
-  "INDOAS" = "India and Other Asia",
+  "IND" = "India",
   "USAEUR" = "USA, Europe, Russia,\nJapan and ex-USSR countries"
 )
 
-df_plot_production <- df_production_regions %>%
+start_year = 1900
+end_year = 2100
+
+#load data for post 2030 capacity additions (projections)
+#data gives production, so convert to capacity using 0.8 production factor
+# given in Mt/yr
+projected_cap_additions <- read.csv("inputdata/other/primary_steel_prod_default.csv") %>%
+  select(region, period, value) %>%
+  filter(period > 2030, period <= 2100) %>% #GEM capacity additions go up to 2035
+  mutate(value = value / 0.8) %>% #convert to capacity
+  group_by(region) %>%
+  arrange(period) %>%
+  mutate(cap_additions = value - lag(value)) %>% #calculate capacity additions
+  mutate(cap_additions = ifelse(is.na(cap_additions), value, ifelse(cap_additions < 0, 0, cap_additions))) %>%
+  mutate(cum_sum = cumsum(cap_additions)) %>%
+  ungroup() %>% 
+  select(region, period, cum_sum) %>%
+  # show projections only for India and SSA
+  filter(!(region %in% c("USA","EUR","REF","NEU","JPN", "CHA","World", "CAZ", "LAM", "MEA", "OAS"))) %>%
+  # filter(!(region %in% c("World", "CAZ", "LAM", "MEA", "OAS"))) %>%
+  rename(Region = region, Year = period, value = cum_sum)
+
+#here, we add the capacity additions from plants with little data available ("no retirement date")
+# they are already accounted for in Remaining_BOF_capacity
+df_plot_capacity <- regional_data %>%
+  mutate(Total_BOF_capacity_additions = Total_BOF_capacity_additions + Total_BOF_capacity_additions_no_retirement_date) %>%
+  # select(-Total_BOF_capacity_additions, - Total_BOF_capacity_additions_no_retirement_date, -Remaining_BOF_capacity) %>%
+  # rename(value = Yearly_BOF_Capacity_additions) %>%
+  select(-Remaining_BOF_capacity, -Total_BOF_capacity_additions_no_retirement_date, -Yearly_BOF_Capacity_additions) %>%
+  rename(value = Total_BOF_capacity_additions) %>%
+  mutate(value = value /1000) %>%
+  filter(case_when(Region %in% c("IND", "SSA") ~ Year < 2035,
+                                            T  ~ Year <2100 )) %>%
+  bind_rows(projected_cap_additions)
+
+
+df_plot_capacity <- df_plot_capacity %>%
   pivot_wider(names_from = Region, values_from = value) %>%
-  mutate(INDOAS = IND + OAS) %>%
+  # mutate(INDOAS = IND + OAS) %>%
   mutate(USAEUR = USA + EUR + REF + NEU + JPN) %>%
-  select(-IND, -OAS, -USA, -EUR, -REF, -NEU, -JPN) %>%
-  pivot_longer(cols = c(CHA, USAEUR, SSA, INDOAS)) %>%
+  select(-OAS, -USA, -EUR, -REF, -NEU, -JPN, -CAZ, -LAM, -MEA) %>%
+  pivot_longer(cols = c(CHA, USAEUR, SSA, IND)) %>%
+  #projected values are given in 5y time steps. Remove the NAs that are inbetween
+  filter(!(is.na(value)))
+
+#need to add another value for 2100 for USAEUR and CHA
+rows_to_add <- df_plot_capacity %>%
+  filter(name %in% c("USAEUR", "CHA")) %>%
+  group_by(name) %>%
+  arrange(Year) %>%
+  summarise(value = last(value)) %>%
+  mutate(Year = 2100)
+
+df_plot_capacity <- df_plot_capacity %>%
+  bind_rows(rows_to_add) %>%
   mutate(Region = recode(name, !!!region_labels))
 
-p <- ggplot(data=df_plot_production,
-       aes(x=Historic_Time, y=value, colour=Region)) +
-  geom_line()
+#label years after 2025
+df_plot_capacity <- df_plot_capacity %>%
+  mutate(segment = ifelse(Year < 2025, "Historic capacity", ifelse(Year < 2032,"New announcements","Projections")))
+
+p <- ggplot() +
+  geom_line(data=df_plot_capacity,
+            aes(x=Year, y=value, colour=Region,linetype = segment), size = 1) +
+  scale_linetype_manual(values = c("Historic capacity" = "solid", "New announcements" = "111111", "Projections" = "1343")) +
+  scale_color_manual(values = c(
+      "China" = "#e41c23",
+      "Sub-saharan Africa" = "#06723e",
+      "India" = "#ff7f00",
+      "USA, Europe, Russia,\nJapan and ex-USSR countries" = "#110a9a"
+    )) +
+  theme_bw() +
+labs(title = "Regional BF-BOF cumulative capacity additions\n(historical, new announcements as of June 2025\nand future projections)",
+       x = "Year",
+       y = "Cumulative BF-BOF capacity installed (Mtpa)",
+       colour = "Region",
+       linetype = "Segment") +
+  scale_x_continuous(breaks = seq(start_year, end_year, by = 10),
+                    limits = c(start_year,end_year)) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 11),
+    # legend.position = "bottom",
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    #rotate xticks
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  ) +
+  geom_vline(xintercept = 2025, linetype = "solid", size = 0.4 , color = "#565555") +
+  # geom_rect(aes(xmin = 2025, xmax = end_year, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.2)
+  geom_rect(aes(xmin = start_year, xmax = 2025, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.2)
+
+
+
 
 p
+# ggsave("figs_temp/BOF_regional_capacity_plot.png", p, width = 8, height = 6, dpi = 300)
+```
+
+```{R calc regional capacity ADDITIONS data}
+
+region_labels <- c(
+  "CHA" = "China",
+  "SSA" = "Sub-saharan Africa",
+  "IND" = "India",
+  "USAEUR" = "USA, Europe, Russia,\nJapan and ex-USSR countries"
+)
+
+bins = 10
+start_year = 1900
+end_year = 2096
+
+bin_years <- seq(start_year, end_year, by = bins)
+#(period - 1900 - 5) / 5 to get index for correct bin year,
+#add to df, group by bin year and sum. 
+
+#load projected capacity additions
+projected_cap_additions <- read.csv("inputdata/other/primary_steel_prod_default.csv") %>%
+  select(region, period, value) %>%
+  filter(period > 2030, period <= 2100) %>% #GEM capacity additions go up to 2035
+  mutate(value = value / 0.8) %>% #convert to capacity
+  group_by(region) %>%
+  arrange(period) %>%
+  mutate(cap_additions = value - lag(value)) %>% #calculate capacity additions
+  mutate(cap_additions = ifelse(is.na(cap_additions), value, ifelse(cap_additions < 0, 0, cap_additions))) %>%
+  ungroup() %>%
+  select(region, period, cap_additions) %>%
+  # show projections only for India and SSA
+  filter(!(region %in% c("USA","EUR","REF","NEU","JPN", "CHA","World", "CAZ", "LAM", "MEA", "OAS"))) %>%
+  rename(Region = region, Year = period, value = cap_additions)
+
+
+#here, we add the capacity additions from plants with little data available ("no retirement date")
+# they are already accounted for in Remaining_BOF_capacity
+df_plot_capacity <- regional_data %>%
+  mutate(Total_BOF_capacity_additions = Total_BOF_capacity_additions + Total_BOF_capacity_additions_no_retirement_date) %>%
+  select(-Total_BOF_capacity_additions, - Total_BOF_capacity_additions_no_retirement_date, -Remaining_BOF_capacity) %>%
+  rename(value = Yearly_BOF_Capacity_additions) %>%
+  mutate(value = value /1000) %>%
+  filter(case_when(Region %in% c("IND", "SSA") ~ Year < 2035,
+                                            T  ~ Year <2100 )) %>%
+  bind_rows(projected_cap_additions)
+
+df_plot_capacity <- df_plot_capacity %>%
+  pivot_wider(names_from = Region, values_from = value) %>%
+  # mutate(INDOAS = IND + OAS) %>%
+  mutate(USAEUR = USA + EUR + REF + NEU + JPN) %>%
+  select(-OAS, -USA, -EUR, -REF, -NEU, -JPN, -CAZ, -LAM, -MEA) %>%
+  pivot_longer(cols = c(CHA, USAEUR, SSA, IND)) %>%
+  mutate(Region = recode(name, !!!region_labels)) %>% 
+  mutate(Region = factor(Region, levels = c("Sub-saharan Africa", "India","China", "USA, Europe, Russia,\nJapan and ex-USSR countries"))) %>% 
+  filter(!(is.na(value)))
+
+df_plot_capacity <- df_plot_capacity %>%
+  mutate(bin_year = bin_years[(Year - (start_year - bins))/bins]) %>%
+  group_by(name, Region, bin_year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+# print(df_plot_capacity %>% filter(Region == "India", bin_year > 2020))
+
+
+#label years after 2025
+df_plot_capacity <- df_plot_capacity %>%
+  mutate(segment = ifelse(bin_year >= 2025, "New announcements", "Historic capacity"))
+
+p <- ggplot() +
+  geom_bar(data=df_plot_capacity,
+            aes(x=bin_year, y=value, fill=Region),
+            position = "stack", 
+          stat="identity") +
+  # scale_linetype_manual(values = c("Historic capacity" = "solid", "New announcements" = "22")) +
+  scale_fill_manual(values = c(
+      "China" = "#e41c23",
+      "Sub-saharan Africa" = "#06723e",
+      "India" = "#ff7f00",
+      "USA, Europe, Russia,\nJapan and ex-USSR countries" = "#110a9a"
+    )) +
+  theme_bw() +
+labs(title = "Regional BF-BOF capacity additions\n(historical, new announcements as of June 2025\nand future projections)",
+       x = "Year",
+       y = "BF-BOF capacity additions (Mtpa)",
+       fill = "Region") +
+  scale_x_continuous(breaks = seq(start_year, end_year, by = 10),
+                    limits = c(start_year,end_year)) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 11),
+    # legend.position = "bottom",
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    #rotate xticks
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  ) +
+  geom_vline(xintercept = 2025, linetype = "solid", size = 0.4 , color = "#565555") +
+  # geom_rect(aes(xmin = 2025, xmax = end_year, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.2)
+  geom_rect(aes(xmin = start_year, xmax = 2025, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.15)
+
+
+
+p
+# ggsave("figs_temp/BOF_regional_capacity_additions_10y.png", p, width = 8, height = 6, dpi = 300)
+```
+
+```{R calc production data}
+
+regions_to_filter <- c("USA", "EUR", "CHA", "IND", "OAS", "SSA", "REF", "NEU", "JPN")
+
+
+df_production_regions <- df_production_bof %>%
+  mutate(type = "bof") %>%
+  bind_rows(df_production_eaf %>%
+              mutate(type = "eaf") %>%
+              filter(Region=="IND")
+              ) %>%
+  bind_rows(df_production_other %>%
+              mutate(type = "other")) %>%
+  rename_all(clean_column_names) %>%
+  mutate(value = value / 1e6) #convert from t to Mt
+
+#load projected production
+projected_production <- read.csv("inputdata/other/primary_steel_prod_default.csv") %>%
+  select(region, period, value) %>%
+  filter(period > 2025, period <= 2100) %>% #production data goes up to 2022
+  mutate(type = "bof") %>%
+  rename(Region = region, Historic_Time = period)
+
+#add new rows for India coal-DRI projections
+new_rows <- data.frame(
+  Historic_Time = c(2023, 2025, 2030, 2023),
+  Region = c("IND", "IND", "IND", "IND"),
+  value = c(50,40, 15, 60),
+  type = c("eaf", "eaf", "eaf", "bof")
+)
+
+df_production_regions <- df_production_regions %>%
+  bind_rows(projected_production) %>%
+  bind_rows(new_rows)
+
+```
+
+```{R plot regional production data}
+
+region_labels <- c(
+  "CHA" = "China",
+  "SSA" = "Sub-saharan Africa",
+  "IND" = "India",
+  "USAEUR" = "USA, Europe, Russia,\nJapan and ex-USSR countries"
+)
+
+col_useur <- "#110a9a"
+col_cha <- "#e41c23"
+col_ind <- "#ff7f00"
+col_ssa <- "#06723e"
+
+df_plot_production <- df_production_regions %>%
+  pivot_wider(names_from = Region, values_from = value) %>%
+  mutate(USAEUR = USA + EUR + REF + NEU + JPN) %>%
+  select(-OAS, -USA, -EUR, -REF, -NEU, -JPN, -CAZ, -LAM, -MEA) %>%
+  pivot_longer(cols = c(CHA, USAEUR, SSA, IND)) %>%
+  mutate(Region = recode(name, !!!region_labels)) %>% 
+  mutate(alpha = ifelse(type == "bof", 0.7, ifelse(type == "eaf", 0.5,0.3))) %>%
+  mutate(Region = factor(Region, levels = c("Sub-saharan Africa", "India","China", "USA, Europe, Russia,\nJapan and ex-USSR countries")))
+
+
+p <- ggplot(data = df_plot_production,
+            aes(x = Historic_Time, y = value, fill = Region, alpha = type, group = interaction(type, Region))) +
+  geom_area() +
+  scale_alpha_manual(values = c("bof" = 0.6, "eaf" = 0.4, "other" = 0.2), 
+                    labels = c("Oxygen furnace", "Coal-DRI-EAF/IF\n(India only))", "Open hearth furnace/\nBessemer process")) +
+  scale_fill_manual(values = c(
+      "China" = col_cha,
+      "Sub-saharan Africa" = col_ssa,
+      "India" = col_ind,
+      "USA, Europe, Russia,\nJapan and ex-USSR countries" = col_useur
+    )) +
+  theme_bw() +
+  labs(title = "Historical primary steel production for key regions (by production type)",
+       x = "Year",
+       y = "Primary steel production (Mt/yr)",
+       colour = "Region",
+       alpha = "Steel production route") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 11),
+    # legend.position = "bottom",
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+  )
+  
+p <- p +  
+  #add segment and annotation
+  #US/EUR
+  geom_segment(aes(
+    x = 1950, xend = 1965, y = 250, yend = 250), 
+    arrow = arrow(length = unit(0.2, "cm")), 
+    color = col_useur, show.legend = FALSE) +
+  annotate("rect", 
+          xmin= 1904, xmax=1950,
+          ymin=200, ymax=370,
+          alpha=0.4, color = col_useur, fill = "white") +
+  annotate("text", x = 1940,
+      y = 250, 
+      #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+      label ="1st wave:\nGlobal North,\npost WW2",
+        hjust = 0.8, vjust = 0.1,
+        lineheight = 0.9, size = 3.5) +
+  #CHA
+  geom_segment(aes(
+    x = 1995, xend = 2010, y = 670, yend = 670), 
+    arrow = arrow(length = unit(0.2, "cm")), 
+    color = col_cha, show.legend = FALSE) +
+  annotate("rect", 
+          xmin= 1958, xmax=1995,
+          ymin=600, ymax=740,
+          alpha=0.4, color = col_cha, fill = "white") +
+  annotate("text", x = 1990,
+      y = 600, 
+      #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+      label ="2nd wave:\nChina, 2000s",
+        hjust = 0.9, vjust = -0.3,
+        lineheight = 0.9, size = 3.5) +
+  #IND
+  geom_segment(aes(
+    x = 2005, xend = 2015, y = 1100, yend = 1100), 
+    arrow = arrow(length = unit(0.2, "cm")), 
+    color = col_ind, show.legend = FALSE) +
+  annotate("rect", 
+          xmin= 1971, xmax=2005,
+          ymin=1050, ymax=1190,
+          alpha=0.4, color = col_ind, fill = "white") +
+  annotate("text", x = 2000,
+      y = 1080, 
+      #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+      label ="3rd wave:\nIndia, today",
+        hjust = 0.9, vjust = -0.2,
+        lineheight = 0.9, size = 3.5) +
+  #SSA
+  geom_segment(aes(
+    x = 2007, xend = 2019, y = 1300, yend = 1300), 
+    arrow = arrow(length = unit(0.2, "cm")), 
+    color = col_ssa, show.legend = FALSE) +
+  annotate("rect", 
+          xmin= 1962, xmax=2007,
+          ymin=1240, ymax=1380,
+          alpha=0.4, color = col_ssa, fill = "white") +
+  annotate("text", x = 2002,
+      y = 1270, 
+      #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+      label ="4th wave:\nSSA, near future",
+        hjust = 0.9, vjust = -0.1,
+        lineheight = 0.9, size = 3.5) +
+  geom_vline(xintercept = 2022, linetype = "solid", size = 0.4 , color = "#565555")
+
+
+
+p
+ggsave("figs_temp/BOF_regional_production_plot_wprojections.png", p, width = 8, height = 6, dpi = 300)
 ```
