@@ -21,7 +21,11 @@ library(stringr)
 
 ```{r load, echo = FALSE}
 #LOAD GDX
-max_lockin <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
+max_lockin <- "inputdata/gdx/PolicyExtended-NPi.gdx"
+
+# max_lockin <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
+
+# max_lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
 
 ```
 
@@ -41,7 +45,7 @@ plotted_years <- c(2030, 2040, 2050)
 # plotted_regions <- c("JPN","CAZ")
 plotted_regions <- c('EUR', 'CHA', 'USA', 'IND') 
 # plotted_regions <- c('CHA', 'IND') 
-fs = 10 # font size
+fs = 8 # font size
 
 route_names <- tribble(
   ~route,          ~route_name,
@@ -409,7 +413,7 @@ lcop <- lcop %>%
   full_join(tePrc2route, by=c("all_te","opmoPrc")) %>% # TODO: check eaf-pri (3 routes)
   left_join(o37_relativeOutflow, by=c("all_te", "opmoPrc", "period", "region")) %>%
   mutate(value = value * relativeOutflow)%>% 
-  mutate(value = value * 1.2 * 1000)
+  mutate(value = value * 1000) #in USD2017
 
 
 ###################################################
@@ -427,7 +431,7 @@ lcop <- lcop %>%
 #   left_join(qm_budget, by=c("period", "region")) %>%
 #   mutate(value = -mat2ue / value) %>% 
 #   select(-mat2ue, -data) %>% 
-#   mutate(value = value * 1.2 * 1000)
+#   mutate(value = value  * 1000)
 
 # pricePrim <- priceSteel %>% 
 #   filter(all_in == "ue_steel_primary") %>%
@@ -515,8 +519,8 @@ lcop_avg <- lcop_avg %>%
 # PREPARE FOR PLOTTING
 
 ## uncomment if you want to plot average lcop value over plant lifetime
-# lcop_plot <- lcop_avg %>%
-lcop_plot <- lcop %>%
+lcop_plot <- lcop_avg %>%
+# lcop_plot <- lcop %>%
   left_join(route_names, by="route") %>% 
   select(-route) %>% 
   rename(route = route_name) %>%
@@ -662,13 +666,15 @@ lcop_plot <- lcop_plot %>%
 # p.lcop
 
 ```
+
+
 ```{R}
 ##############################
 # PLOT BOTH ROUTES
 lcop_plot
 lcop_2r <- lcop_plot %>%
   # filter(route %in% c("BF-BOF CCS retrofit", "DRI-EAF H2", "BF-BOF", "DRI-EAF NG")) %>%
-  filter(route %in% c("DRI-EAF H2", "BF-BOF", "DRI-EAF NG")) %>%
+  filter(route %in% c("DRI-EAF H2", "BF-BOF","BF-BOF CCS", "DRI-EAF NG", "Scrap EAF")) %>%
   mutate(pos = period %>% as.factor() %>% as.numeric(),
           route = as.factor(route))
 
@@ -676,7 +682,7 @@ lcop_2r <- lcop_plot %>%
 lcop_2r <- lcop_2r %>%
   # mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.15, pos - 0.15))
   # mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.3, ifelse(route == "BF-BOF", pos - 0.3, ifelse(route == "DRI-EAF NG", pos + 0.1, pos - 0.1))))
-  mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.3, ifelse(route == "BF-BOF", pos - 0.1, ifelse(route == "DRI-EAF NG", pos + 0.1, pos - 0.1))))
+  mutate(pos_offset = ifelse(route == "DRI-EAF H2", pos + 0.225, ifelse(route == "BF-BOF", pos - 0.225, ifelse(route == "DRI-EAF NG", pos + 0.075, ifelse(route == "BF-BOF CCS", pos - 0.075, pos + 0.375)))))
 
 label_data <- lcop_2r %>%
   group_by(route, pos_offset, region) %>%
@@ -709,7 +715,7 @@ p.drieaf <- ggplot() +
     aes(x = pos_offset, y = value, fill=factor(component, levels = unique_component_names), group = route),
     position="stack",
     stat="identity", 
-    width=0.2,
+    width=0.15,
     ) + 
   scale_fill_manual(
     values = setNames(component_names_1r$color, unique_component_names),
@@ -717,8 +723,8 @@ p.drieaf <- ggplot() +
   ) +
   facet_wrap(~region) +
   xlim(xmin, xmax)  +
-  # ylim(-51.,1300.) +
-  geom_text(data=year_label, aes(label = period), x = year_label$pos, y = -70., size = fs/2.5, parse = T) +
+  ylim(-51.,2200.) +
+  geom_text(data=year_label, aes(label = period), x = year_label$pos, y = -70., size = 2, parse = T) +
   geom_text(
     data = label_data,
     aes(
@@ -727,7 +733,7 @@ p.drieaf <- ggplot() +
       label = str_wrap(label,10),
       angle = 90
     ),
-    size = 3,
+    size = 1.5,
     lineheight = 0.8,
     hjust = 0, 
     color = "black"
@@ -737,12 +743,12 @@ p.drieaf <- ggplot() +
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
         axis.text.y=element_text(size=fs),
-        strip.text = element_text(size = 1.2 * fs)) + 
-  labs(title = name,
+        strip.text = element_text(size = 0.8 * fs)) + 
+  labs(title = "Average LCOP over the lifetime of a newly built plant in a given year,\nfor different production pathways (Extended lock-in)",
       y = "LCOP [$/t]",
       fill="Cost Component")
 
-# ggsave(filename = "HCCS_650.png", width = 6, height = 5, device='png', dpi=300)
+# ggsave(filename = "./figs_temp/lcop_byroute_lockin.png", width = 6, height = 5, device='png', dpi=300)
 
 
 p.drieaf
@@ -754,7 +760,7 @@ p.drieaf
 ###################################################
 # PREPARE FOR PLOTTING
 
-#HERE: calculate average lcop for PRIMARY steel (ie weighted by route)
+#HERE: calculate average lcop for ALL steel (primary and secondary, weighted by route production)
 
 
 #tePrc2route
@@ -838,12 +844,14 @@ lcop_plot <- lcop_weighted %>%
   ungroup %>%
   mutate(value = pmax(value, 0.)) # sweep negative prices under the rug
 
+###save if needed
+write.csv(lcop_plot, file = "./inputdata/other/lcop_avg_npi.csv", row.names = FALSE)
 
 ### continue with lcop plot
 
 lcop_plot$component <- factor(lcop_plot$component, levels=unique(component_names$component_name))
 
-plotted_years1 <- c(2025, 2030, 2035, 2040, 2045, 2050, 2055)
+plotted_years1 <- c(2030, 2035, 2040, 2045, 2050, 2055, 2060)
 
 lcop_plot <- lcop_plot %>%
   filter(region %in% plotted_regions, period %in% plotted_years1) %>% 
@@ -884,23 +892,18 @@ component_names <- component_names %>%
   filter(color %in% unique(lcop_plot$color))
 
 
-# comp_non_zero = c("Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
-# comp_non_zero = c("Electricity", "Hydrogen", "Non-H2 Gases", "Liquids", "Solids", "Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
 comp_non_zero = c("Emission Cost", "Electricity", "Hydrogen", "Non-H2 Gases", "Liquids", "Solids", "Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
 
-# regi_non_zero = c("EU")
-# regi_non_zero = c("EU", "China", "USA")
 regi_non_zero = c("EU", "China", "USA", "India")
 
 lcop_plot <- lcop_plot %>% 
-  filter(component %in% unique(component_names$component_name)) # %>%
-  # mutate(value = ifelse(region %in% regi_non_zero, value, 0.)) %>% 
-  # mutate(value = ifelse(component %in% comp_non_zero, value, 0.))
+  filter(component %in% unique(component_names$component_name))
 
 
-#currently no prices plot
-# priceSteel_plot <- priceSteel_plot %>%
-#   filter(region %in% regi_non_zero)
+total_lcop <- lcop_plot %>%
+  group_by(period, region) %>%
+  summarize(value = sum(value)) %>%
+  ungroup()
 
 ###################################################
 # PLOT
@@ -909,21 +912,19 @@ p.lcop <- ggplot() +
   geom_bar(data=lcop_plot, position="stack", stat="identity",
            aes(x = period, y = value, fill=component)) +
   # xlim(xmin, xmax) +
-  # ylim(-601.,1390) +
+  geom_text(aes(period, value+40, label = round(value,0), fill = NULL), data = total_lcop) +
+  ylim(-1.,1251) +
   facet_wrap(~region) +
   scale_fill_manual(values=unique(component_names$color)) +
   # geom_text(data=year_label, aes(label = period), x = year_label$year_label_pos, y = -600., size = fs/2.5, parse = T) +
   # geom_point(data=priceSteel_plot, aes(x = pos, y = price, shape=shape)) +
   theme(text=element_text(size=fs),
-        # axis.title.x=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.ticks.x=element_blank(),
         axis.text.y=element_text(size=fs),
         strip.text = element_text(size = 1.2 * fs)) +
   labs(y = "LCOP [$/t]", fill="Cost Component",
-      x = "Period", title = "Average levelized cost of steel, weighted by production route (Green policy 650)")
+      x = "Period", title = "Average levelized cost of steel, weighted by production route (Fast transition, 820)")
 
-# ggsave(filename = "all_routes.png", width = 12, height = 6, device='png', dpi=300)
+# ggsave(filename = "figs_temp/lcop_avg_fastTransition820.png", width= 8, height = 6, device='png', dpi=300)
 
 p.lcop
 
