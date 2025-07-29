@@ -935,21 +935,24 @@ calc_total_investments <- function(gdx) {
     mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) %>% 
     group_by(region, period, entyFE) %>% 
     summarize(priceFuel = sum(priceFuel)) %>%
-    ungroup
+    ungroup()
+
   #prices obtained from SE sector are not available before 2030, so we take pm_FEPrice for these
   df.priceFuel_before_2030 <- as.quitte(readGDX(gdx, "pm_FEPrice", restore_zeros = F)) %>%
     filter(sector == "indst", emiMkt == "ETS", value > 0., period %in% t, period<2030) %>%
     select(region, period, all_enty, value) %>%
-    rename(entyFE = all_enty, priceFuel = value)
-
-  df.priceFuel <- df.priceFuel %>%
-      bind_rows(df.priceFuel_before_2030)
-
-  # df.priceFuel <- df.priceFuel[order(df.priceFuel$period, df.priceFuel$entyFE),]
+    rename(entyFE = all_enty, priceFuel2 = value)
 
   df.FosDem <- df.FosDem %>%
     left_join(df.priceFuel, by=c("region", "period", "entyFE")) %>%
-    mutate(value = fosdem * priceFuel) %>%
+    left_join(df.priceFuel_before_2030, by=c("region", "period", "entyFE")) 
+  
+  df.FosDem <- df.FosDem %>%
+    #if no weighted priceFuel is available, use the priceFuel2 (pm_FEprice)
+    mutate(priceFuel = ifelse(is.na(priceFuel), priceFuel2, priceFuel)) %>%
+    select(-priceFuel2) %>%
+    mutate(value = fosdem * priceFuel *5 ) %>% #*5 because the demand is in TWa/a, and the investments are given over the whole time step (5y)
+    # NB. all investments are then translated to USD/yr at the end of the function
     select(region, period, value, entyFE) %>%
     rename(component = entyFE)
 
@@ -958,11 +961,38 @@ calc_total_investments <- function(gdx) {
     bind_rows(df.Inv_steel_fossil) %>%
     bind_rows(df.Inv_el_h2) %>%
     bind_rows(df.Inv_el) %>%
-    bind_rows(df.FosDem)
-
+    bind_rows(df.FosDem) %>%
+    mutate(value = value/5) #make value yearly cost. 
+    #Only works up to 2060, afterwards model takes 10 yr time steps
+    #but this estimation is also only valid up to 2050/2055
   return(df.total_Inv)
 }
 
+
+```
+
+
+```{R calc cumu investment costs}
+calc_cumu_investment_costs <- function(df, discount = 0.05){
+  # annualize the costs
+  df_discounted <- df %>%
+    group_by(region, scenario, component) %>%
+    complete(period = full_seq(period, 1)) %>%  # Fill every year
+    arrange(region, scenario, component, period) %>%
+    mutate(value1 = value) %>%
+    fill(value1, .direction = "down") %>%
+    ungroup() %>%
+    select(-value) %>%
+    # use correct time periods. Earliest time period is 2028.
+    mutate(period = period - 2) %>%
+    # multiply by discount factor and take cumulative sum
+    arrange(region, scenario, component, period) %>%
+    mutate(discounted_cost = value1 / ((1 + discount) ^ (period - 2025))) %>%
+    group_by(region, scenario, component) %>%
+    # summarise(total_cost_lockin = sum(discounted_cost, na.rm = TRUE)) %>%
+    mutate(cumulative_value = cumsum(discounted_cost)) %>%
+    ungroup()
+}
 
 ```
 ```{r load gdx}
@@ -988,12 +1018,12 @@ t <- as.numeric(t[t >= 2010 & t <= 2100])
 # base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
 
 greenpol <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
-base <- "inputdata/gdx/GreenPolicy-NPi.gdx"
-# base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
+# base <- "inputdata/gdx/GreenPolicy-NPi.gdx"
+base <- "inputdata/gdx/PolicyExtended-PkBudg650.gdx"
 #calculate costs
-df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = TRUE, start_year = 2025, end_year = 2070)
+df.totalcosts1 <- calc_total_costs(greenpol, scenario_name = "greenpol", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
 
-df.totalcosts2 <- calc_total_costs(base, scenario_name = "polextended", include_co2_price = TRUE, start_year = 2025, end_year = 2070)
+df.totalcosts2 <- calc_total_costs(base, scenario_name = "polextended", include_co2_price = FALSE, start_year = 2025, end_year = 2070)
 
 # print(df.totalcosts$cumu %>% filter(region == "IND"), n=Inf)
 
@@ -1092,45 +1122,48 @@ print(final_plot)
 #save
 # ggsave("figs_temp/costs_greenpol_vs_polextended_650_noCO2.png", plot = final_plot, width = 10, height = 12, dpi = 300)
 # ggsave("figs_temp/costs_greenpol_vs_NPi_1000_reg.png", plot = final_plot, width = 10, height = 12, dpi = 300)
-ggsave("figs_temp/costs_greenpol_650_vs_NPi_wCO2.png", plot = final_plot, width = 10, height = 12, dpi = 300)
+# ggsave("figs_temp/costs_greenpol_650_vs_NPi_wCO2.png", plot = final_plot, width = 10, height = 12, dpi = 300)
 ```
 
 ```{R calculate investment costs}
 
-greenpol <- "inputdata/gdx/GreenPolicy-PkBudg650.gdx"
-# base <- "inputdata/gdx/PolicyExtended-PkBudg1000.gdx"
-npi <- "inputdata/gdx/GreenPolicy-NPi.gdx"
+greenpol <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
+base <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
+npi <- "inputdata/gdx/PolicyExtended-NPi.gdx"
 
-region_to_plot <- "SSA"
 
-#calculate costs
+region_to_plot <- "IND"
+
+# #calculate costs
 df.totalcosts1 <- calc_total_investments(greenpol) %>%
   filter(region == region_to_plot) %>%
-  mutate(scenario = "Green policy")
+  mutate(scenario = "Fast Transition")
 
-# df.totalcosts2 <- calc_total_investments(base) %>%
-#   filter(region == "IND") %>%
-#   mutate(scenario = "Policy extended")
+df.totalcosts2 <- calc_total_investments(base) %>%
+  filter(region == region_to_plot) %>%
+  mutate(scenario = "Extended lock-in")
 
 df.totalcosts3 <- calc_total_investments(npi) %>%
   filter(region == region_to_plot) %>%
   mutate(scenario = "NPi")
 
 
+
 ```
 
 ```{R tests}
-df.totalcosts1 <- df.totalcosts1 %>%
-  # bind_rows(df.totalcosts2) %>%
+df.totalcosts <- df.totalcosts1 %>%
+  bind_rows(df.totalcosts2) %>%
   bind_rows(df.totalcosts3) %>%
-  filter(period >= 2030, period <= 2070)
+  filter(period >= 2030, period <= 2050)
 
 
-plot_df <- df.totalcosts1 %>%
+plot_df <- df.totalcosts %>%
   mutate(region = factor(region, levels = plotted_regions, labels = region_names$region_name)) %>%
   mutate(period = as.numeric(period)) %>%
   mutate(value = value * 1000) #convert to billion USD 
 
+plot_df_cumu_invest <- calc_cumu_investment_costs(plot_df, discount = 0.05)
 # print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
 ```
 
@@ -1138,8 +1171,8 @@ plot_df <- df.totalcosts1 %>%
 
 component_order <- c("fesos", "fegas", "Electricity CAPEX (other)","Electricity CAPEX (for electrolysis)", "Electrolysis CAPEX", "Steel CAPEX (dri-eaf)","Steel CAPEX (eaf secondary)", "Steel CAPEX (bf-ccs)", "Steel CAPEX (bf-bof)")
 
-# scen_order <- c( "NPi", "Policy extended", "Green policy")
-scen_order <- c( "NPi", "Green policy")
+scen_order <- c( "NPi", "Extended lock-in", "Fast Transition")
+# scen_order <- c( "NPi", "Green policy")
 
 plot_df <- plot_df %>%
   mutate(
@@ -1161,11 +1194,17 @@ component_colors <- c(
 )
 
 plot_df <- plot_df %>%
-mutate(
-  period = as.integer(period),
-  component = factor(component, levels = component_order), 
-  scenario = factor(scenario, levels = scen_order)
-)
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  ) %>%
+  filter(!component %in% c("fesos", "fegas")) #remove fesos and fegas
+
+total_cost_df <- plot_df %>%
+  group_by(region,period, scenario) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
 
 # Area plot
 region_plot <- ggplot() +
@@ -1177,9 +1216,9 @@ region_plot <- ggplot() +
   scale_fill_manual(values = component_colors) +
   facet_wrap(~ scenario, nrow = 3) +
   labs(
-    title = "Investment costs for SSA, for a `NPi` and `Green\npolicy push` scenario (650 PkBudget)",
+    title = "Investment costs for India, for a `NPi`, `Extended lock-in` and `Fast\ntransition` scenario (820 PkBudget)",
     x = "Year",
-    y = "Investment costs\n(Bill. USD)",
+    y = "Investment costs\n(Bill. USD) per year",
     fill = "Component"
   ) +
   guides(fill=guide_legend(nrow=5)) +
@@ -1192,7 +1231,255 @@ region_plot <- ggplot() +
 region_plot
 
 #save
-ggsave("figs_temp/investment_costs_andopex650_SSA.png", plot = region_plot, width = 8, height = 13, dpi = 300)
+ggsave("figs_temp/investment_costs_820_IND.png", plot = region_plot, width = 8, height = 13, dpi = 300)
+```
+
+```{R plot costs CUMU}
+
+component_order <- c("fesos", "fegas", "Electricity CAPEX (other)","Electricity CAPEX (for electrolysis)", "Electrolysis CAPEX", "Steel CAPEX (dri-eaf)","Steel CAPEX (eaf secondary)", "Steel CAPEX (bf-ccs)", "Steel CAPEX (bf-bof)")
+
+scen_order <- c( "NPi", "Extended lock-in", "Fast Transition")
+# scen_order <- c( "NPi", "Green policy")
+
+plot_df <- plot_df_cumu_invest %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  )
+
+component_colors <- c(
+  "Electricity CAPEX (other)" = "#fad231",
+  "Electricity CAPEX (for electrolysis)" = "#da9e06",
+  "Electrolysis CAPEX" = "#4fecdc",
+  "Steel CAPEX (dri-eaf)" = "#33eea3",
+  "Steel CAPEX (eaf secondary)" = "#1edf3e", 
+  "Steel CAPEX (bf-bof)" = "#323232",
+  "Steel CAPEX (bf-ccs)" = "#747373",
+  "fegas" = "#0d4e8f7b", 
+  "fesos" = "#7b3e0253"
+)
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  ) %>%
+  filter(!component %in% c("fesos", "fegas")) #remove fesos and fegas
+
+
+
+# Area plot
+region_plot <- ggplot() +
+  geom_area(data = plot_df,
+          aes(x = period, y = cumulative_value, fill = factor(component)),
+          position = "stack", 
+          stat="identity", 
+          width=3) +
+  scale_fill_manual(values = component_colors) +
+  facet_wrap(~ scenario, nrow = 3) +
+  labs(
+    title = "Cumulative investment costs for India, for a `NPi`, `Extended lock-in` and `Fast\ntransition` scenario (820 PkBudget)",
+    x = "Year",
+    y = "Investment costs\n(Bill. USD) per year",
+    fill = "Component"
+  ) +
+  guides(fill=guide_legend(nrow=5)) +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom"
+  ) 
+region_plot
+
+#save
+# ggsave("figs_temp/investment_costs_cumu_820_IND.png", plot = region_plot, width = 8, height = 13, dpi = 300)
+```
+
+
+```{R calculate investment costs}
+
+base <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
+norelining <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
+npi <- "inputdata/gdx/PolicyExtended-NPi.gdx"
+
+
+#calculate costs
+df.totalcosts1 <- calc_total_investments(base) %>%
+  mutate(scenario = "Extended lock-in")
+
+df.totalcosts2 <- calc_total_investments(norelining) %>%
+  mutate(scenario = "Fast transition")
+
+df.totalcosts3 <- calc_total_investments(npi) %>%
+  mutate(scenario = "NPi")
+```
+
+```{R tests}
+df.totalcosts <- df.totalcosts1 %>%
+  bind_rows(df.totalcosts2) %>%
+  bind_rows(df.totalcosts3) %>%
+  filter(period >= 2030, period <= 2050) %>%
+  group_by(period, scenario, component) %>%
+  # group_by(period, scenario) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(region = "Global")
+
+
+plot_df <- df.totalcosts %>%
+  # mutate(region = factor(region, levels = plotted_regions)) %>%
+  mutate(period = as.numeric(period)) %>%
+  mutate(value = value * 1000) #convert to billion USD 
+
+
+# print(df.totalcosts_plot %>% filter(region == "IND"), n=Inf)
+```
+
+```{R plot costs}
+
+component_order <- c("fesos", "fegas", "Electricity CAPEX (other)","Electricity CAPEX (for electrolysis)", "Electrolysis CAPEX", "Steel CAPEX (dri-eaf)","Steel CAPEX (eaf secondary)", "Steel CAPEX (bf-ccs)", "Steel CAPEX (bf-bof)")
+
+scen_order <- c( "NPi", "Extended lock-in", "Fast transition")
+# scen_order <- c( "NPi", "Green policy")
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  )
+
+component_colors <- c(
+  "Electricity CAPEX (other)" = "#fad231",
+  "Electricity CAPEX (for electrolysis)" = "#da9e06",
+  "Electrolysis CAPEX" = "#4fecdc",
+  "Steel CAPEX (dri-eaf)" = "#33eea3",
+  "Steel CAPEX (eaf secondary)" = "#1edf3e", 
+  "Steel CAPEX (bf-bof)" = "#323232",
+  "Steel CAPEX (bf-ccs)" = "#747373",
+  "fegas" = "#0d4e8f7b", 
+  "fesos" = "#7b3e0253"
+)
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  ) %>%
+  # # remove fesos and fegas
+  filter(!component %in% c("fesos", "fegas"))
+
+# Area plot
+region_plot <- ggplot() +
+  geom_bar(data = plot_df,
+          aes(x = period, y = value, fill = factor(component)),
+          position = "stack", 
+          stat="identity", 
+          width=3) +
+  scale_fill_manual(values = component_colors) +
+  facet_wrap(~ scenario, nrow = 3) +
+  labs(
+    title = "Investment costs for a `NPi`, `Fast Transition` and `Extended lock-in`\nscenario (820 PkBudget)",
+    x = "Year",
+    y = "Investment costs\n(Bill. USD) per year",
+    fill = "Component"
+  ) +
+  guides(fill=guide_legend(nrow=3)) +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom"
+  ) 
+region_plot
+
+#save
+ggsave("figs_temp/investment_costs_820_global.png", plot = region_plot, width = 8, height = 11, dpi = 300)
+```
+
+
+```{R calculate investment costs per region}
+
+norelining <- "inputdata/gdx/PolicyExtended_noRelining-PkBudg820.gdx"
+# norelining <- "inputdata/gdx/GreenPolicy-PkBudg820.gdx"
+
+df.totalcosts1 <- calc_total_investments(norelining) %>%
+  mutate(scenario = "Fast transition")
+
+
+plot_df <- df.totalcosts1 %>%
+  filter(period >= 2030, period <= 2050) %>%
+  # mutate(region = factor(region, levels = plotted_regions)) %>%
+  mutate(period = as.numeric(period)) %>%
+  mutate(value = value * 1000) #convert to billion USD 
+
+```
+
+```{R plot costs}
+
+component_order <- c("fesos", "fegas", "Electricity CAPEX (other)","Electricity CAPEX (for electrolysis)", "Electrolysis CAPEX", "Steel CAPEX (dri-eaf)","Steel CAPEX (eaf secondary)", "Steel CAPEX (bf-ccs)", "Steel CAPEX (bf-bof)")
+
+scen_order <- c( "NPi", "Extended lock-in", "Fast transition")
+# scen_order <- c( "NPi", "Green policy")
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  )
+
+component_colors <- c(
+  "Electricity CAPEX (other)" = "#fad231",
+  "Electricity CAPEX (for electrolysis)" = "#da9e06",
+  "Electrolysis CAPEX" = "#4fecdc",
+  "Steel CAPEX (dri-eaf)" = "#33eea3",
+  "Steel CAPEX (eaf secondary)" = "#1edf3e", 
+  "Steel CAPEX (bf-bof)" = "#323232",
+  "Steel CAPEX (bf-ccs)" = "#747373",
+  "fegas" = "#0d4e8f7b", 
+  "fesos" = "#7b3e0253"
+)
+
+plot_df <- plot_df %>%
+  mutate(
+    period = as.integer(period),
+    component = factor(component, levels = component_order), 
+    scenario = factor(scenario, levels = scen_order)
+  ) %>%
+  # # remove fesos and fegas
+  filter(!component %in% c("fesos", "fegas"))
+
+# Area plot
+region_plot <- ggplot() +
+  geom_bar(data = plot_df,
+          aes(x = period, y = value, fill = factor(component)),
+          position = "stack", 
+          stat="identity", 
+          width=3) +
+  scale_fill_manual(values = component_colors) +
+  facet_wrap(~ region, nrow = 3) +
+  labs(
+    title = "Investment costs for a `NPi`, `Fast Transition` and `Extended lock-in`\nscenario (820 PkBudget)",
+    x = "Year",
+    y = "Investment costs\n(Bill. USD)",
+    fill = "Component"
+  ) +
+  guides(fill=guide_legend(nrow=2)) +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "bottom"
+  ) 
+region_plot
+
+#save
+ggsave("figs_temp/investment_costs_820allregions.png", plot = region_plot, width = 8, height = 11, dpi = 300)
 ```
 
 
