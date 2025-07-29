@@ -1,4 +1,4 @@
-```{r setup, include = FALSE}
+```{R setup, include = FALSE}
 path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/AnalysisScript/"
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(
@@ -18,55 +18,71 @@ library(grid)
 library(purrr)
 ```
 
-```{r load data}
-mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg650.mif")
-mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-1-PkBudg650.mif")
-mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-2-PkBudg650.mif")
+```{R load data}
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-NPi.mif")
 
-mifdata4 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS-PkBudg650.mif")
-mifdata5 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreBFCCS-PkBudg650.mif")
-mifdata6 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS_BFCCSEarlyReti-PkBudg650.mif")
+mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif")
 
-#other lock in scenarios
-mifdata7 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg650.mif")
-mifdata8 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg1000.mif")
-mifdata9 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg1000.mif")
+mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif")
+
+
+mifdata4 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-PkBudg820.mif")
+# mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_expensiveH2-2-PkBudg650.mif")
+
+# mifdata4 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS-PkBudg650.mif")
+# mifdata5 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreBFCCS-PkBudg650.mif")
+# mifdata6 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended_moreCCS_BFCCSEarlyReti-PkBudg650.mif")
+
+# #other lock in scenarios
+# mifdata7 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg650.mif")
+# mifdata8 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg1000.mif")
+# mifdata9 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicyEarlyReti-PkBudg1000.mif")
+
+
+# # #"default" scen. NPi?
+# mifdata11 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-NPi.mif") %>%
+#   mutate(scenario= "default") %>%
+#   filter(variable == "Production|Industry|Steel|Primary") %>% #use primary production only
+#   filter(between(period, 2020, 2100)) %>% 
+#   arrange(region,period)
+
+# write.csv(mifdata11, "primary_steel_prod_default.csv")
 
 mifdata1 <- mifdata1 %>%
-  mutate(scenario = "Base H2 cost")
+  mutate(scenario = "NPi")
   # mutate(scenario = "Policy Extended Transition")
 
 mifdata2 <- mifdata2 %>%
-  mutate(scenario = "High H2 cost")
+  mutate(scenario = "Fast transition")
 
 mifdata3 <- mifdata3 %>%
-  mutate(scenario = "Very high H2 cost")
+  mutate(scenario = "Extended lock-in")
 
 mifdata4 <- mifdata4 %>%
-  mutate(scenario = "More CCS injection capacity")
+  mutate(scenario = "Green Policy")
 
-mifdata5 <- mifdata5 %>%
-  mutate(scenario = "Early retirement of BF-BOF-CCS")
+# mifdata5 <- mifdata5 %>%
+#   mutate(scenario = "Early retirement of BF-BOF-CCS")
 
-mifdata6 <- mifdata6 %>%
-  mutate(scenario = "More CCS injection capacity +\nearly retirement of BF-BOF-CCS")
+# mifdata6 <- mifdata6 %>%
+#   mutate(scenario = "More CCS injection capacity +\nearly retirement of BF-BOF-CCS")
 
-mifdata7 <- mifdata7 %>%
-  mutate(scenario = "Green Policy (1.5C)")
+# mifdata7 <- mifdata7 %>%
+#   mutate(scenario = "Green Policy (1.5C)")
 
-mifdata8 <- mifdata8 %>%
-  mutate(scenario = "Base scenario (WB2C)")
+# mifdata8 <- mifdata8 %>%
+#   mutate(scenario = "Base scenario (WB2C)")
 
-mifdata9 <- mifdata9 %>%
-  mutate(scenario = "Green Policy (WB2C)")
+# mifdata9 <- mifdata9 %>%
+#   mutate(scenario = "Green Policy (WB2C)")
 
-mifdata10 <- mifdata1 %>%
-  mutate(scenario = "Base scenario (1.5C)")
+# mifdata10 <- mifdata1 %>%
+#   mutate(scenario = "Base scenario (1.5C)")
 
 
 ```
 
-```{r plot params, echo = FALSE}	
+```{R plot params, echo = FALSE}	
 
 fs = 10 # font size
 
@@ -81,13 +97,16 @@ steel_route <- tribble(
 )
 ```
 
-```{r change data, echo = FALSE}
+```{R change data, echo = FALSE}
 
-base_list <- list(mifdata7, mifdata8, mifdata9, mifdata10)
-h2_list <- list(mifdata1, mifdata2, mifdata3)
-ccs_list <- list(mifdata1, mifdata4, mifdata5, mifdata6)
+base_list <- list(mifdata1, mifdata2, mifdata3)
+india_list <- list(mifdata3, mifdata4)
+test_list <- list(mifdata2, mifdata4)
 
-lockin_list <- list(mifdata10, mifdata7, mifdata8, mifdata9)
+# h2_list <- list(mifdata1, mifdata2)
+# ccs_list <- list(mifdata1, mifdata4, mifdata5, mifdata6)
+
+# lockin_list <- list(mifdata10, mifdata7, mifdata8, mifdata9)
 
 #filter breakdown of steel production
 process_data <- function(df) {
@@ -96,9 +115,8 @@ process_data <- function(df) {
     filter(region == "World", unit == "Mt/yr") %>%
     filter(between(period, 2020, 2100)) %>%
     mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) 
-    # %>%
-    # filter(variable != "SCRAP-EAF") #remove secondary steel
+    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
+    filter(variable != "SCRAP-EAF") #remove secondary steel
 }
 
 process_data_ccs <- function(df) {
@@ -120,69 +138,69 @@ process_data_lockin <- function(df) {
     filter(variable != "SCRAP-EAF") #remove secondary steel
 }
 
-#get full df
-prsteel_df <- h2_list %>%
-  map_dfr(process_data)
+# #get full df
+# prsteel_df <- h2_list %>%
+#   map_dfr(process_data)
 
-mainscens_df <- base_list %>%
-  map_dfr(process_data)
+# mainscens_df <- base_list %>%
+#   map_dfr(process_data)
 
-ccsscen_df <- ccs_list %>%
-  map_dfr(process_data_ccs)
+# ccsscen_df <- ccs_list %>%
+#   map_dfr(process_data_ccs)
 
-lockin_df <- lockin_list %>%
-  map_dfr(process_data_lockin)
+# lockin_df <- lockin_list %>%
+#   map_dfr(process_data_lockin)
 
-#calculate h2 shareh2_ in total primary steel
-h2_share <- prsteel_df %>%
-  group_by(period, scenario) %>%
-  summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
-  mutate(h2_share = h2_share*100) #to percent
+# #calculate h2 shareh2_ in total primary steel
+# h2_share <- prsteel_df %>%
+#   group_by(period, scenario) %>%
+#   summarise(h2_share = sum(value[variable %in% c("DRI-H2-EAF", "DRI-NG-EAF")]) / sum(value)) %>%
+#   mutate(h2_share = h2_share*100) #to percent
 
-h2_all_steel_shares <- prsteel_df %>%
-  group_by(period, scenario) %>%
-  summarise(
-    h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value),
-    scrap_eaf_share = sum(value[variable == "SCRAP-EAF"]) / sum(value),
-    coal_based_share = sum(value[variable %in% c("BF-BOF", "BF-BOF-CCS")]) / sum(value)
-  ) %>%
-  mutate(
-    h2_share = h2_share * 100,
-    scrap_eaf_share = scrap_eaf_share * 100,
-    coal_based_share = coal_based_share * 100
-  )
+# h2_all_steel_shares <- prsteel_df %>%
+#   group_by(period, scenario) %>%
+#   summarise(
+#     h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value),
+#     scrap_eaf_share = sum(value[variable == "SCRAP-EAF"]) / sum(value),
+#     coal_based_share = sum(value[variable %in% c("BF-BOF", "BF-BOF-CCS")]) / sum(value)
+#   ) %>%
+#   mutate(
+#     h2_share = h2_share * 100,
+#     scrap_eaf_share = scrap_eaf_share * 100,
+#     coal_based_share = coal_based_share * 100
+#   )
 
 
-h2_share_lockin <- lockin_df %>%
-  group_by(period, scenario) %>%
-  summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
-  mutate(h2_share = h2_share*100) #to percent
+# h2_share_lockin <- lockin_df %>%
+#   group_by(period, scenario) %>%
+#   summarise(h2_share = sum(value[variable == "DRI-H2-EAF"]) / sum(value)) %>%
+#   mutate(h2_share = h2_share*100) #to percent
 
-#calculate amount of H2 dri
-h2_dri <- prsteel_df %>%
-  filter(variable == "DRI-H2-EAF") %>%
-  group_by(period, scenario) %>%
-  summarise(value = sum(value))
+# #calculate amount of H2 dri
+# h2_dri <- prsteel_df %>%
+#   filter(variable == "DRI-H2-EAF") %>%
+#   group_by(period, scenario) %>%
+#   summarise(value = sum(value))
 
-ccs_share <- ccsscen_df %>%
-  group_by(period, scenario, region) %>%
-  summarise(ccs_share = sum(value[variable == "BF-BOF-CCS"]) / sum(value)) %>%
-  mutate(ccs_share = ccs_share*100) #to percent
+# ccs_share <- ccsscen_df %>%
+#   group_by(period, scenario, region) %>%
+#   summarise(ccs_share = sum(value[variable == "BF-BOF-CCS"]) / sum(value)) %>%
+#   mutate(ccs_share = ccs_share*100) #to percent
 
-all_steel_shares <- ccsscen_df %>%
-  group_by(period, scenario, region) %>%
-  summarise(
-    total_production = sum(value, na.rm = TRUE),
-    h2_share = sum(value[variable == "DRI-H2-EAF"], na.rm = TRUE) / total_production,
-    bf_bof_ccs_share = sum(value[variable == "BF-BOF-CCS"], na.rm = TRUE) / total_production,
-    bf_bof_share = sum(value[variable == "BF-BOF"], na.rm = TRUE) / total_production,
-    ng_share = sum(value[variable == "DRI-NG-EAF"], na.rm = TRUE) / total_production
-  )
+# all_steel_shares <- ccsscen_df %>%
+#   group_by(period, scenario, region) %>%
+#   summarise(
+#     total_production = sum(value, na.rm = TRUE),
+#     h2_share = sum(value[variable == "DRI-H2-EAF"], na.rm = TRUE) / total_production,
+#     bf_bof_ccs_share = sum(value[variable == "BF-BOF-CCS"], na.rm = TRUE) / total_production,
+#     bf_bof_share = sum(value[variable == "BF-BOF"], na.rm = TRUE) / total_production,
+#     ng_share = sum(value[variable == "DRI-NG-EAF"], na.rm = TRUE) / total_production
+#   )
 
 
 ```
 
-```{r plot global barplots}
+```{R plot global barplots}
 
 target_labels <- list(
   "1.5C" = "Steel sector transition for a 1.5°C target (with overshoot)",
@@ -276,8 +294,8 @@ p
 ggsave("figs_temp/steel_production_scenarios.png", width = 12, height = 10, dpi = 300)
 ```
 
-```{r calc cumu em}
-calc_cumuem <- function(df) {
+```{R calc cumu em}
+calc_cumuem <- function(df, region_to_calculate) {
   df %>%
     filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
                 # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
@@ -286,7 +304,7 @@ calc_cumuem <- function(df) {
                  fixed = TRUE)) %>%
     # filter(between(period, 2025, 2070),
     filter(between(period, 2025, 2070),
-           region == "World") %>%
+           region == region_to_calculate) %>%
     select(-model, -region) %>%
     #add up the different components: solid, liquids ..
     group_by(period, scenario) %>%
@@ -298,16 +316,45 @@ calc_cumuem <- function(df) {
     summarise(cumu_CO2 = max(cumu_CO2))
 }
 
-ccsscen_emi_df <- ccs_list %>%
-  map_dfr(calc_cumuem) 
+
+calc_em <- function(df) {
+  df %>%
+    filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
+                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
+                 variable,
+                 ignore.case = TRUE, 
+                 fixed = TRUE)) %>%
+    # filter(between(period, 2025, 2070),
+    filter(between(period, 2025, 2070)) %>%
+    select(-model) %>%
+    #add up the different components: solid, liquids ..
+    group_by(period, scenario, region) %>%
+    summarise(total_CO2_yearly = sum(value, na.rm = TRUE),
+          total_CO2_5year = total_CO2_yearly * 5)
+}
+
+# ccsscen_emi_df <- ccs_list %>%
+#   map_dfr(calc_cumuem) 
 
 mainscens_df_emi <- base_list %>%
-  map_dfr(calc_cumuem)
+  map_dfr(calc_cumuem, region_to_calculate = "World")
+
+mainscens_df_emi_notcumu <- base_list %>%
+  map_dfr(calc_em)
+
+indiascens_df_emi <- india_list %>%
+  map_dfr(calc_cumuem, region_to_calculate = "IND")
+
+indiascens_df_emi_notcumu <- india_list %>%
+  map_dfr(calc_em)
+
+testscens_df_eminotcumu <- test_list %>%
+  map_dfr(calc_em)
 
 ```
 
 
-```{r plot h2 share, echo = FALSE}
+```{R plot h2 share, echo = FALSE}
 
 h2_share_plot <- h2_share
 
@@ -339,7 +386,7 @@ ggplot(h2_share_plot, aes(x = period, y = h2_share, color = scenario)) +
 # ggsave("figs/h2_share.png", width = 8, height = 5, dpi = 300)
 ```
 
-```{r plot h2 scen all steel shares, echo = FALSE}
+```{R plot h2 scen all steel shares, echo = FALSE}
 
 h2_all_steel_shares_long <- h2_all_steel_shares %>%
   pivot_longer(
@@ -377,7 +424,7 @@ ggplot(h2_all_steel_shares_long, aes(x = period, y = share, color = scenario)) +
 #save
 # ggsave("figs/h2scenarios_all_steel_shares.png", width = 8, height = 5, dpi = 300)
 ```
-```{r plot h2 share lockin scen, echo = FALSE}
+```{R plot h2 share lockin scen, echo = FALSE}
 
 # h2_share_plot <- h2_share_lockin
 
@@ -411,7 +458,7 @@ ggsave("figs_temp/h2_share_lockin.png", width = 8, height = 5, dpi = 300)
 ```
 
 
-```{r plot ccs cumu emi}
+```{R plot ccs cumu emi}
 # Copy the data
 ccsscen_emi_df_plot <- ccsscen_emi_df
 
@@ -506,45 +553,45 @@ ggplot(ccsscen_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scenari
 
 ```
 
-```{r plot base cumu emi}
+```{R plot base cumu emi}
 # Copy the data
-mainscens_emi_df_plot <- mainscens_df_emi
+mainscens_emi_df_plot <- mainscens_df_emi %>%
+  mutate(cumu_CO2 = cumu_CO2 / 1e3)  # Convert to Gt CO2
 
 # Get unique scenario names
-unique_scenarios <- unique(mainscens_emi_df_plot$scenario)
-unique_scenarios <- c("Base scenario (1.5C)", 
-                      "Green Policy (1.5C)",
-                      "Base scenario (WB2C)",
-                      "Green Policy (WB2C)")
+unique_scenarios <- c(unique(mainscens_emi_df_plot$scenario))
+co2_emissions <- c(mainscens_emi_df_plot$cumu_CO2)
 
 # Convert to factor
 mainscens_emi_df_plot$scenario <- factor(mainscens_emi_df_plot$scenario, levels = unique_scenarios)
 
 
-# find x-coordinates of bars
-x_base <- which(levels(mainscens_emi_df_plot$scenario) == "Base scenario (1.5C)")
-x_others <- which(levels(mainscens_emi_df_plot$scenario) != "Base scenario (1.5C)")
+# # find x-coordinates of bars
+x_base <- which(levels(mainscens_emi_df_plot$scenario) == unique_scenarios[1])
+x_others <- which(levels(mainscens_emi_df_plot$scenario) != unique_scenarios[1])
 
 
-y1 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Base scenario (1.5C)"] / 1e3
-y2 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Base scenario (WB2C)"] / 1e3
+y1 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == unique_scenarios[1]]
+y2 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == unique_scenarios[2]]
+y3 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == unique_scenarios[3]]
+# y2 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Base scenario (WB2C)"] / 1e3
 
 
-emi_1p5diff <- y1- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (1.5C)"] / 1e3
-emi_wb2cdiff <- y2-mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (WB2C)"] / 1e3
+# emi_1p5diff <- y1- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (1.5C)"] / 1e3
+# emi_wb2cdiff <- y2-mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == "Green Policy (WB2C)"] / 1e3
 
-# find y-coordinates for arrows
-y_base <- y1 + 10  # slightly above base bar
-y_others <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario != "Base scenario (1.5C)"] / 1e3 + 30
+# # find y-coordinates for arrows
+y_base <- y1 + 5  # slightly above base bar
+# y_others <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario != "Base scenario (1.5C)"] / 1e3 + 30
 
 
 
 # Plot
-ggplot(mainscens_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scenario)) +
+ggplot(mainscens_emi_df_plot, aes(x = scenario, y = cumu_CO2, fill = scenario)) +
   geom_bar(stat = "identity", width = 0.6) +
   scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
   # scale_fill_manual(values = c("#d7a614", "#3fa60e", "#bb5700", "#1a7213")) +
-  scale_fill_manual(values = c("#88CCEE", "#0072B2", "#FDB863", "#D55E00")) +
+  scale_fill_manual(values = c("#88CCEE", "#FDB863", "#D55E00")) +
   labs(
     title = "Cumulative CO2 Emissions (2025-2070)\nfrom steel production, by scenario",
     x = "Scenario",
@@ -554,48 +601,224 @@ ggplot(mainscens_emi_df_plot, aes(x = scenario, y = cumu_CO2 / 1e3, fill = scena
   guides(fill = "none") +
   scale_y_continuous(
     name = "Cumulative CO2 (Gt CO2)",
-    sec.axis = sec_axis(~ ((. / 235)) * 100, name = "Fraction of remaining 1.5°C carbon budget (%)")
+    sec.axis = sec_axis(~ ((. / 585)) * 100, name = "Fraction of remaining well-below 2°C carbon budget (%)")
   ) +
   theme(
-    text = element_text(size = 10),
-    title = element_text(size = 12),
-    axis.title = element_text(size = 11),
-    axis.text = element_text(size = 10),
+    text = element_text(size = 9),
+    title = element_text(size = 11),
+    axis.title = element_text(size = 10),
+    axis.text = element_text(size = 9),
     axis.text.x = element_text(angle = 0, hjust = 0.5),
     panel.grid.major = element_line(linetype = "dashed", color = "gray70")
-  )+
-  # Add arrows from Base CCS assumption to other bars
-  geom_segment(aes(x = x_base, xend = x_base, y = y1, yend = y_base), 
-               color = "#7e7e7e") +
-  geom_segment(aes(x = x_base, xend = x_others[1], y = y_base, yend = y_base), 
-               color = "#7e7e7e") +
-  geom_segment(aes(x = x_others[2], xend = x_others[2], y = y2, yend = y2+10), 
-               color = "#7e7e7e") +
-  geom_segment(aes(x = x_others[2], xend = x_others[3], y = y2+10, yend = y2+10), 
-               color = "#7e7e7e") +
-  geom_segment(aes(x = x_others[1], xend = x_others[1], y = y_base, yend = y_others[1]-30),
-               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
-  geom_segment(aes(x = x_others[3], xend = x_others[3], y = y2+10, yend = y_others[3]-30),
-               arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+  ) +
+  annotate("text", x = (x_base*1), y = y_base,
+            label = paste0("", round(co2_emissions[1], 0), " GtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base*2), y = y2 +5,
+            label = paste0("", round(co2_emissions[2], 0), " GtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base*3), y = y3 +5,
+           label = paste0("", round(co2_emissions[3], 0), " GtCO2"), size = 3, fontface = "bold", color = "#7e7e7e")
+  #+
+  # # Add arrows from Base CCS assumption to other bars
+  # geom_segment(aes(x = x_base, xend = x_base, y = y1, yend = y_base), 
+  #              color = "#7e7e7e") +
+  # geom_segment(aes(x = x_base, xend = x_others[1], y = y_base, yend = y_base), 
+  #              color = "#7e7e7e") +
+  # geom_segment(aes(x = x_others[2], xend = x_others[2], y = y2, yend = y2+10), 
+  #              color = "#7e7e7e") +
+  # geom_segment(aes(x = x_others[2], xend = x_others[3], y = y2+10, yend = y2+10), 
+  #              color = "#7e7e7e") +
+  # geom_segment(aes(x = x_others[1], xend = x_others[1], y = y_base, yend = y_others[1]-30),
+  #              arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
+  # geom_segment(aes(x = x_others[3], xend = x_others[3], y = y2+10, yend = y_others[3]-30),
+  #              arrow = arrow(type = "closed", length = unit(0.15, "inches")), color = "#7e7e7e") +
 
-  # Add white circles behind percentage difference labels
-  geom_point(aes(x = x_base*2, y = (y_base) / 2 + 15),
-             shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
+  # # Add white circles behind percentage difference labels
+  # geom_point(aes(x = x_base*2, y = (y_base) / 2 + 15),
+  #            shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
 
-  geom_point(aes(x = x_base*4, y = (y_base) / 2 + 35),
-             shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
+  # geom_point(aes(x = x_base*4, y = (y_base) / 2 + 35),
+  #            shape = 21, fill = "white", color = "#7e7e7e", size = 20) +
   
-  annotate("text", x = (x_base*2), y = (y_base) / 2 + 15,
-           label = paste0("-", round(emi_1p5diff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
-  annotate("text", x = (x_base *4), y = (y_base ) / 2 +35,
-           label = paste0("-", round(emi_wb2cdiff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e")
+  # annotate("text", x = (x_base*2), y = (y_base) / 2 + 15,
+  #          label = paste0("-", round(emi_1p5diff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  # annotate("text", x = (x_base *4), y = (y_base ) / 2 +35,
+  #          label = paste0("-", round(emi_wb2cdiff, 1), "\nGtCO2"), size = 3, fontface = "bold", color = "#7e7e7e")
 
 #save
-ggsave("figs_temp/cumu_emi_base_scen.png", width = 8, height = 5, dpi = 300)
+# ggsave("figs_temp/cumu_emi_base_scen.png", width = 5, height = 5, dpi = 300)
 
 ```
 
-```{r plot ccs share, echo = FALSE}
+```{R plot base cumu emi}
+
+scenario_order <- c("Green Policy", "Extended lock-in")
+
+# Copy the data
+mainscens_emi_df_plot <- indiascens_df_emi %>%
+  mutate(cumu_CO2 = cumu_CO2 / 1e3)   # Convert to Gt CO2
+
+# Get unique scenario names
+unique_scenarios <- c(unique(mainscens_emi_df_plot$scenario))
+
+# Convert to factor
+mainscens_emi_df_plot$scenario <- factor(mainscens_emi_df_plot$scenario, levels = scenario_order)
+
+#order columns the expected way and grab cumulative CO2 emissions
+mainscens_emi_df_plot <-  mainscens_emi_df_plot[order(mainscens_emi_df_plot$scenario),]
+co2_emissions <- c(mainscens_emi_df_plot$cumu_CO2)
+
+
+# # find x-coordinates of bars
+x_base <- which(levels(mainscens_emi_df_plot$scenario) == unique_scenarios[1])
+x_others <- which(levels(mainscens_emi_df_plot$scenario) != unique_scenarios[1])
+
+
+y1 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == scenario_order[1]]
+y2 <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario == scenario_order[2]]
+#
+# # find y-coordinates for arrows
+y_base <- y1 + 1  # slightly above base bar
+# y_others <- mainscens_emi_df_plot$cumu_CO2[mainscens_emi_df_plot$scenario != "Base scenario (1.5C)"] / 1e3 + 30
+
+fs <- 12	
+
+
+# Plot
+ggplot(mainscens_emi_df_plot, aes(x = scenario, y = cumu_CO2, fill = scenario)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
+  # scale_fill_manual(values = c("#d7a614", "#3fa60e", "#bb5700", "#1a7213")) +
+  scale_fill_manual(values = c("#88CCEE", "#D55E00")) +
+  labs(
+    title = "Cumulative CO2 Emissions in India (2025-2070)\nfrom steel production, by scenario",
+    x = "Scenario",
+    y = "Cumulative CO2 (Gt CO2)"
+  ) +
+  theme_classic(base_size = fs+3) +
+  guides(fill = "none") +
+  scale_y_continuous(
+    name = "Cumulative CO2 (Gt CO2)",
+    sec.axis = sec_axis(~ ((. / 585)) * 100, name = "Fraction of remaining well-below 2°C carbon budget (%)")
+  ) +
+  theme(
+    text = element_text(size = 9),
+    title = element_text(size = 11),
+    axis.title = element_text(size = 10),
+    axis.text = element_text(size = 9),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major = element_line(linetype = "dashed", color = "gray70")
+  ) +
+  annotate("text", x = (x_base*0.5), y = y_base,
+            label = paste0("", round(co2_emissions[1], 0), " GtCO2"), size = 3, fontface = "bold", color = "#7e7e7e") +
+  annotate("text", x = (x_base*1), y = y2 +1,
+            label = paste0("", round(co2_emissions[2], 0), " GtCO2"), size = 3, fontface = "bold", color = "#7e7e7e")
+#save
+# ggsave("figs_temp/cumu_emi_india_scen.png", width = 5, height = 5, dpi = 300)
+
+```
+
+```{R}
+
+plot_emi_notcumu <- mainscens_df_emi_notcumu %>%
+  filter(scenario != "NPi")
+
+#plot annual emissions (Gt per year) for all regions
+#facet is region
+p <- ggplot(plot_emi_notcumu) +
+  geom_line(aes(x = period, y = total_CO2_yearly, color = scenario), size = 0.6) + #to GtCO2
+  geom_point(aes(x = period, y = total_CO2_yearly, color = scenario), size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  facet_wrap(~ region, scales = "free_y") +
+  labs(title = "Annual CO2 Emissions from Steel Production (2025-2070) by Region and Scenario",
+       x = "Year",
+       y = "CO2 Emissions (Mt CO2)",
+       color = "Scenario") +
+  scale_color_manual(values = c("#4d4d50","#c9b60d")) +
+  theme_minimal(base_size = 14)
+
+p
+```
+
+```{R}
+
+testscens_df_eminotcumu_plot <- mainscens_df_emi_notcumu %>%
+  filter(region != "World") %>% #filter out world
+  filter(scenario != "NPi") %>% #filter out NPi scenario
+  group_by(region, scenario) %>%
+  arrange(period) %>%
+  mutate(cumuCO2 = cumsum(total_CO2_5year)) %>%
+  ungroup()
+
+#order by largest area
+last_period <- max(testscens_df_eminotcumu_plot$period)
+
+region_order <- testscens_df_eminotcumu_plot %>%
+  filter(period == last_period) %>%
+  group_by(region) %>%
+  summarise(cumuCO2 = max(cumuCO2), .groups = "drop") %>%
+  arrange(cumuCO2) %>%
+  pull(region)
+testscens_df_eminotcumu_plot$region <- factor(testscens_df_eminotcumu_plot$region, levels = region_order)
+
+#calculate percentage of total CO2
+totalCO2_2070 <- testscens_df_eminotcumu_plot %>%
+  group_by(scenario) %>%
+  filter(period == last_period) %>%
+  summarise(totalCO2 = sum(cumuCO2)) %>%
+  pull(totalCO2)
+scale_factor <- 100/ (totalCO2_2070 / 1e3)
+
+#plot area plot of cumulative emissions
+ggplot(testscens_df_eminotcumu_plot, aes(x = period, y = cumuCO2 / 1e3, fill = region)) +
+  geom_area( alpha = 0.8) +
+  facet_wrap(~ scenario) +
+  labs(title = "Cumulative CO2 Emissions from steel production (2025-2070)",
+       x = "Year",
+       y = "Cumulative CO2 Emissions (Gt CO2)",
+       fill = "Region") +
+  # scale_y_continuous(
+  #   sec.axis = sec_axis(~ . * scale_factor, name = "Percentage of total CO2 emissions in 2070 (%)")
+  # ) +
+  scale_fill_manual(values = c("CHA" = "#e41818",
+                            "IND"="#e48108",
+                            "JPN"="#d4c7b1",
+                            "OAS"="#c9b60d",
+                            "USA"="#08a0e4",
+                            "EUR"="#0912c3",
+                            "NEU"="#c9b60d",
+                            "REF"="#aac90d",
+                            "SSA"="#0dc90d",
+                            "LAM"="#c90dbc",
+                            "MEA"="#8340c2",
+                            "CAZ"="#08e4a0")
+                            ) +
+  theme_minimal(base_size = 14)
+```
+
+```{R}
+
+plot_emi_notcumu <- indiascens_df_emi_notcumu %>%
+  filter(region == "IND") %>%
+  select(-region)
+
+#plot annual emissions (Gt per year) for all regions
+#facet is region
+p <- ggplot(plot_emi_notcumu) +
+  geom_line(aes(x = period, y = total_CO2_yearly, color = scenario), size = 0.6) + #to GtCO2
+  geom_point(aes(x = period, y = total_CO2_yearly, color = scenario), size = 2, shape = 21, fill = "white", stroke = 0.8) +
+  labs(title = "Annual CO2 Emissions from Steel Production in India (2025-2070) by scenario",
+       x = "Year",
+       y = "CO2 Emissions (Mt CO2)",
+       color = "Scenario") +
+  scale_color_manual(values = c(
+    "Extended lock-in" = "#4d4d50",
+    "Fast transition"="#c9b60d",
+    "Green Policy"="#0dc962")) +
+  theme_minimal(base_size = 14)
+
+p
+```
+
+```{R plot ccs share, echo = FALSE}
 
 ccs_share_glob <- ccs_share %>%
   filter(region == "World") %>%
@@ -632,7 +855,7 @@ ggplot(ccs_share_glob, aes(x = period, y = ccs_share, color = scenario)) +
 # ggsave("figs/ccs_share_global.png", width = 8, height = 5, dpi = 300)
 ```
 
-```{r plot ccs share, echo = FALSE}
+```{R plot ccs share, echo = FALSE}
 
 ccs_share_IND <- ccs_share %>%
   filter(region == "IND") %>%
@@ -666,7 +889,7 @@ ggplot(ccs_share_IND, aes(x = period, y = ccs_share, color = scenario)) +
 
 ```
 
-```{r plot ccs share, echo = FALSE}
+```{R plot ccs share, echo = FALSE}
 
 ccs_share_CHA <- ccs_share %>%
   filter(region == "CHA") %>%
@@ -702,7 +925,7 @@ ggplot(ccs_share_CHA, aes(x = period, y = ccs_share, color = scenario)) +
 # ggsave("figs/ccs_share_oas.png", width = 8, height = 5, dpi = 300)
 ```
 
-```{r plot ccs area plots, echo = FALSE}
+```{R plot ccs area plots, echo = FALSE}
 
 plot_df <- all_steel_shares %>%
   filter(region == "World") %>%
