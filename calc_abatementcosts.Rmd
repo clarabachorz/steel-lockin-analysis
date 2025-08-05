@@ -15,11 +15,12 @@ library(pals)
 library(stringr)
 library("quitte")
 library(zoo)
+library(purrr)
 ```
 
 ```{R read data, include = FALSE}
-# lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
-lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
+lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
+# lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
 
 fast <- read.csv("./inputdata/other/lcop_avg_fasttrans.csv")
 # fast <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
@@ -29,10 +30,10 @@ fast_mif <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForS
 # fast_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>%
 #     mutate(scenario = "Fast transition")
 
-# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>% 
-#     mutate(scenario = "Lock-in")
-lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif") %>% 
+lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>% 
     mutate(scenario = "Lock-in")
+# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif") %>% 
+#     mutate(scenario = "Lock-in")
 ```
 
 
@@ -251,6 +252,36 @@ fscp_df <- lockin_costs_total_discounted %>%
            (total_CO2_lockin - total_CO2_fast)) %>% 
     mutate(em_diff = total_CO2_lockin - total_CO2_fast)
 
+
+region_to_aggr = list(
+    # "OASLAM" = c("OAS", "LAM"), #LAM emits more in fast transition. Grouping them gives fscp = 700
+    "EUR+USA+JPN+REF" = c("EUR", "USA", "CAZ", "NEU", "REF", "JPN")
+)
+
+
+grouped_df <- imap_dfr(region_to_aggr, function(regions, new_region) {
+    fscp_df %>%
+        filter(region %in% regions) %>%
+        summarise(
+            region = new_region,
+            total_cost_lockin = sum(total_cost_lockin, na.rm = TRUE),
+            total_cost_fast = sum(total_cost_fast, na.rm = TRUE),
+            total_CO2_lockin = sum(total_CO2_lockin, na.rm = TRUE),
+            total_CO2_fast = sum(total_CO2_fast, na.rm = TRUE)
+        ) %>% 
+        mutate(
+            fscp = (total_cost_fast - total_cost_lockin) / 
+                   (total_CO2_lockin - total_CO2_fast),
+            em_diff = total_CO2_lockin - total_CO2_fast
+        )
+})
+
+new_regions_flattened <- flatten(region_to_aggr)
+fscp_df_grouped <- fscp_df %>%
+    filter(!region %in% new_regions_flattened) %>%
+    bind_rows(grouped_df)
+
+#currently not used: global abatement cost
 fscp_df_global <- fscp_df %>%
     select(-fscp) %>%
     summarise(across(starts_with("total_cost"), sum, na.rm = TRUE),
@@ -277,7 +308,7 @@ price_carbon2 <- lockin_mif %>%
 
 mean_carbon_price <- mean(c(price_carbon$co2_price, price_carbon2$co2_price))
 
-df <- fscp_df %>%
+df <- fscp_df_grouped %>%
     select(region, fscp, em_diff) %>%
     # mutate(region = factor(region, levels = c("CHN", "USA", "EU", "IND", "JPN", "RUS", "BRA", "ZAF"))) %>%
     arrange(region) %>%
@@ -298,8 +329,8 @@ df$xmax <- df$cum_em
 p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = region)) +
   geom_rect(color = "black") +
   labs(
-    # title = "Marginal abatement cost: from Extended Lock-in to Fast Transition",
-    title = "Marginal abatement cost: from NPi to Fast transition",
+    title = "Marginal abatement cost: from Extended Lock-in to Fast Transition",
+    # title = "Marginal abatement cost: from NPi to Extended Lock-in",
     x = "Cumulative emission difference (GtCo2)",
     y = "Abatement Cost (USD/tCO2)"
   ) +
@@ -308,6 +339,7 @@ p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = regi
       "CHA" = "#e41c23",
       "IND" = "#ff7f00",
       "EUR" = "#110a9a",
+      "EUR+USA+JPN+REF" = "#4870b9",
       "OAS" = "#f6da23",
       "NEU" = "#1ea6f0",
       "REF" = "#b2df8a",
@@ -317,26 +349,14 @@ p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = regi
       "SSA" = "#103b17",
       "MEA" = "#0bbda5")) +
     # add horizontal line with co2 price
-    # geom_hline(yintercept = mean_carbon_price, linetype = "dashed", color = "black") +
-    # annotate("text", x = 5, y = mean_carbon_price + 20, 
-    #          label = paste("Average CO2 price in 2050:", round(mean_carbon_price, 0), "USD/tCO2"),
-    #          color = "black")
-    geom_hline(yintercept = price_carbon$co2_price, linetype = "dashed", color = "black") +
-    annotate("text", x = 30, y = price_carbon$co2_price + 20, 
-             label = paste("CO2 price in 2050:", round(price_carbon, 0), "USD/tCO2"),
+    geom_hline(yintercept = mean_carbon_price, linetype = "dashed", color = "black") +
+    annotate("text", x = 5, y = mean_carbon_price + 20, 
+             label = paste("Average CO2 price in 2050:", round(mean_carbon_price, 0), "USD/tCO2"),
              color = "black")
+    # geom_hline(yintercept = price_carbon$co2_price, linetype = "dashed", color = "black") +
+    # annotate("text", x = 30, y = price_carbon$co2_price + 20, 
+    #          label = paste("CO2 price in 2050:", round(price_carbon, 0), "USD/tCO2"),
+    #          color = "black")
 p
-# ggsave("figs_temp/abatement_costs_steel_NPitoFT.png", p, width = 8, height = 6)
-```
-```{R plot}
-
-ggplot(total_costs, aes(x = period, y = fscp)) +
-    geom_line() +
-    facet_wrap(~ region, scales = "free_y") +
-    labs(title = "Abatement costs of steel production",
-         x = "Year",
-         y = "Abatement cost (USD/tCO2)") +
-    theme_minimal() +
-    # scale_color_manual(values = pals::glasbey()) +
-    theme(legend.position = "bottom")
+# ggsave("figs_temp/abatement_costs_steel_ELtoFT.png", p,bg = "white", width = 8, height = 6)
 ```

@@ -486,11 +486,39 @@ ggplot(plot_df, aes(x = scenario, y = cumuCO2 / 1e3, fill = region)) +
 ```
 ```{R cascacde cumulative emissions}
 
+#add groups here
+region_groups <- list(
+  "OAS+LAM" = c("OAS", "LAM"),
+  "EUR+NEU+USA+JPN+REF+CAZ" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ")
+)
+
+#map regions
+region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
+                      unlist(region_groups))
+
+
+
+# Prepare data with total cumulative emissions and region contributions
+plot_df <- mainscens_df_emi_notcumu %>%
+  filter(region != "World") %>%
+  #group regions and add them up
+  mutate(region = as.character(region)) %>%
+  mutate(region = ifelse(region %in% names(region_map), region_map[region], region)) %>%
+  group_by(region, scenario, period) %>%
+  summarise(total_CO2_5year = sum(total_CO2_5year), .groups = "drop") %>%
+  #resume with cumulative emissions calculation
+  group_by(region, scenario) %>%
+  arrange(period) %>%
+  mutate(cumuCO2 = cumsum(total_CO2_5year)) %>%
+  ungroup() %>%
+  filter(period == 2060) %>%
+  mutate(cumuCO2 = cumuCO2 / 1e3) # Convert to Gt CO2
 
 region_order = c(
   "CHA" = "#e41818",
   "IND"="#e48108",
   "OAS"="#c9b60d",
+  "OAS+LAM" = "#c9b60d",
   "SSA"="#0dc90d",
   "REF"="#aac90d",
   "LAM"="#c90dbc",
@@ -498,9 +526,9 @@ region_order = c(
   "MEA"="#8340c2",
   "USA"="#08a0e4",
   "EUR"="#0912c3",
+  "EUR+NEU+USA+JPN+REF+CAZ" = "#0912c3",
   "NEU"="#c9b60d",
   "CAZ"="#08e4a0")
-
 
 #get region colors from list above
 region_colors <- c(
@@ -508,17 +536,6 @@ region_colors <- c(
   region_order,
   setNames(region_order, paste0(names(region_order), "_2"))
 )
-
-
-# Prepare data with total cumulative emissions and region contributions
-plot_df <- mainscens_df_emi_notcumu %>%
-  filter(region != "World") %>%
-  group_by(region, scenario) %>%
-  arrange(period) %>%
-  mutate(cumuCO2 = cumsum(total_CO2_5year)) %>%
-  ungroup() %>%
-  filter(period == 2060) %>%
-  mutate(cumuCO2 = cumuCO2 / 1e3) # Convert to Gt CO2
 
 plot_df$region <- factor(plot_df$region, levels = names(region_order))
 plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Extended lock-in", "Fast transition"))
@@ -579,7 +596,9 @@ wf_plot <- waterfall(waterfall_data,
 
 plot_df <- plot_df %>%
   filter(period == 2060) %>%
-  mutate(x_pos = ifelse(scenario == "NPi", 1, ifelse(scenario == "Extended lock-in", 14, 27))) #%>%
+  #need to specify xpos for the cumulative emissions bars (stacked)
+  mutate(x_pos = ifelse(scenario == "NPi", 1, 
+                        ifelse(scenario == "Extended lock-in", 8, 15)))
 
 wf_plot +
   geom_bar(data = plot_df,
@@ -591,7 +610,7 @@ wf_plot +
     panel.border = element_blank(),
     panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
     panel.grid.minor = element_blank(),
-    axis.ticks = element_blank())
+    axis.ticks = element_blank()) 
   #sub in basic grey bars instead
   # geom_col(data = total_df %>% filter(scenario == "Extended lock-in"),
   #          aes(x = 14, y = total),
@@ -618,7 +637,7 @@ region_order = c(
   "JPN"="#d4c7b1",
   "MEA"="#8340c2",
   "USA"="#08a0e4",
-  "EUR"="#0912c3",
+  "EUR"="#484eb9",
   "NEU"="#c9b60d",
   "CAZ"="#08e4a0")
 

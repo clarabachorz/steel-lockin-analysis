@@ -21,11 +21,11 @@ library(stringr)
 
 ```{r load, echo = FALSE}
 #LOAD GDX
-max_lockin <- "inputdata/gdx/PolicyExtended-NPi.gdx"
+# max_lockin <- "inputdata/gdx/PolicyExtended-NPi.gdx"
 
 # max_lockin <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
 
-# max_lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
+max_lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
 
 ```
 
@@ -191,7 +191,19 @@ df.SEShares = df.demFe  %>%
   select(-demFE, -demFETotal)
 df.priceFuel <- df.priceFuel %>%
   left_join(df.SEShares, by=c("region", "period", "entySE", "entyFE")) %>%
-  mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) %>% 
+  mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) 
+
+#TODO: plot. Also need to get the Co2 emission cost to substract from fossils
+df.biosolidsfrac <- df.priceFuel %>% filter(entyFE == "fesos")  %>% 
+# Check units. This does not seem correct (something wrong with emicosts?)
+# or instead simply use SE costs to get a rough idea
+  left_join(df.emiFac, by=c("region", "period", "entySE", "entyFE")) %>%
+  left_join(df.priceCO2, by = c("region", "period")) %>%
+  mutate(emicost = ifelse(is.na(emiFac), 0, emiFac) * priceCO2) %>%
+  select(-emiFac, -priceCO2)
+
+
+df.priceFuel <- df.priceFuel  %>% 
   group_by(region, period, entyFE) %>% 
   summarize(priceFuel = sum(priceFuel)) %>%
   ungroup
