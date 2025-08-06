@@ -1,0 +1,174 @@
+# Notebook: Plotting Figure 3
+
+
+In this notebook, we will plot Figure 3, which compares steel production routes for different regions and periods.
+
+
+## Preparing notebook
+
+
+Importing libraries.
+
+```{r}
+library(dplyr)
+require(tidyverse)
+require(ggplot2)
+library(gridExtra)
+library(grid)
+library(purrr)
+
+library(quitte)
+library(mip)
+```
+
+Define some helper functions:
+
+* Function for creating a sample of a dataframe (helpful for quick inspection).
+* Functions for calculating sizes of figures (converting mm and pt to inch).
+* Function for exporting image to various formats with correct size and resolution.
+
+```{r}
+show_sample <- function (df, nr=10) {
+    return(df[sample(nrow(df), nr), ])
+}
+```
+
+```{r}
+dpi <- 300
+pt <- function (x) {
+    return(x / 72)
+}
+mm <- function (x) {
+    return(x * 0.0393700787)
+}
+```
+
+```{r}
+write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
+    for (f in formats) {
+        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps')) {
+            stop(paste0('Unknown format', f))
+        }
+        path <- paste0("./figs/", name, ".", f)
+        ggsave(path, plot = fig, width = width, height = height, dpi = dpi, create.dir = TRUE)
+    }
+}
+```
+
+<!-- #region name="setup" tags=["remove_cell"] -->
+## Load data from MIF files
+<!-- #endregion -->
+
+Loading the relevant scenario data from MIF files.
+
+```{r}
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-NPi.mif")
+mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif")
+mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif")
+```
+
+## Combine and reduce to relevant variables
+
+
+Combine data from three scenarios and filter for relevant steel production variables.
+
+```{r}
+df_data <- rbind(mifdata1, mifdata2, mifdata3) %>% filter(grepl("Production|Industry|Steel|+", variable, fixed = TRUE))
+show_sample(df_data)
+```
+
+## MIP plot for reference
+
+
+This should look just like the output from compareScenarios2.
+
+```{r}
+mip::showAreaAndBarPlots(
+    df_data,
+    as.character(unique(df_data$variable)),
+    mainReg="World",
+    yearsBarPlot=c(2010, 2030, 2050, 2100),
+)
+```
+
+## Process data before custom plotting
+
+
+We perform the following actions on the data before plotting it manually:
+
+* We map the 12 regions onto 6 regions: China, India, OECD, Russia, Lat. America & Oth. Asia, and Middle East & Africa
+* We simplify the variables by stripping of the `Production|Industry|Steel|+|` bit in the front.
+* We reduce periods to relevant ones for plotting.
+
+```{r}
+region_groups <- list(
+    CHA="China",
+    IND="India",
+    CAZ="OECD",
+    EUR="OECD",
+    JPN="OECD",
+    LAM="Lat. America & Oth. Asia",
+    MEA="Middle East & Africa",
+    NEU="OECD",
+    OAS="Lat. America & Oth. Asia",
+    REF="Russia",
+    SSA="Middle East & Africa",
+    USA="OECD",
+    World="World"
+)
+```
+
+```{r}
+df_plot <- (
+    df_data %>%
+    mutate(region = recode(region, !!!region_groups)) %>%
+    group_by(model, scenario, region, period, variable, unit) %>%
+    summarise(value = sum(value)) %>%
+    mutate(variable = sub("Production|Industry|Steel|+|", "", variable, fixed = TRUE)) %>%
+    filter(period %in% c(2030, 2040, 2050))
+)
+show_sample(df_plot)
+```
+
+## Create new plot for Fig. 3
+
+
+We create Figure 3 by combining one stacked-bar plot for the World with a facet of stacked-bar plots for the other regions in a grid.
+
+```{r}
+# Single panel for World.
+subfig_world <- ggplot(df_plot %>% filter(region == "World"), aes(x = period, y = value, fill = variable)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ region) +
+  labs(title = "Fig. 3: Annual steel production", x = NULL, y = "Annual steel production (Mt/yr)") +
+  theme_minimal() + 
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 7, face = "bold"),
+    axis.text.x = element_text(size = 5),
+    axis.title.y = element_text(size = 6),
+    axis.text.y = element_text(size = 5),
+    strip.text.x = element_text(size = 6),
+  )
+
+# Multiple panels through facet_wrap for all other regions.
+subfig_other <- ggplot(df_plot %>% filter(region != "World"), aes(x = period, y = value, fill = variable)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ region, scales = "free_x", ncol = 2, strip.position = "top") +
+  labs(title = NULL, x = NULL, y = NULL, fill = "Routes") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 5),
+    axis.text.y = element_text(size = 5),
+    strip.text.x = element_text(size = 6),
+    legend.title = element_text(size = 7),
+    legend.text = element_text(size = 6),
+  )
+
+# Combine the two into a single figure through grid.arrange.
+fig <- grid.arrange(subfig_world, subfig_other, ncol = 2, widths = c(1, 2))
+
+# Export figure to file(s).
+write_images(fig, "Fig3", height = mm(80))
+show(fig)
+```
