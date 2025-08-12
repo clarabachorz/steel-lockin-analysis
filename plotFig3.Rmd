@@ -91,29 +91,34 @@ mip::showAreaAndBarPlots(
 )
 ```
 
+```{r}
+mip::mipBarYearData(df_data)
+```
+
 ## Process data before custom plotting
 
 
 We perform the following actions on the data before plotting it manually:
 
-* We map the 12 regions onto 6 regions: China, India, OECD, Russia, Lat. America & Oth. Asia, and Middle East & Africa
+* We map the 12 regions onto 6 regions.
 * We simplify the variables by stripping of the `Production|Industry|Steel|+|` bit in the front.
 * We reduce periods to relevant ones for plotting.
+* We obtain the colour codes from MIP.
 
 ```{r}
 region_groups <- list(
     CHA="China",
     IND="India",
-    CAZ="OECD",
-    EUR="OECD",
-    JPN="OECD",
+    CAZ="REJUCAZ",
+    EUR="REJUCAZ",
+    JPN="REJUCAZ",
     LAM="Lat. America & Oth. Asia",
-    MEA="Middle East & Africa",
-    NEU="OECD",
+    MEA="Middle East & North. Africa",
+    NEU="REJUCAZ",
     OAS="Lat. America & Oth. Asia",
-    REF="Russia",
-    SSA="Middle East & Africa",
-    USA="OECD",
+    REF="REJUCAZ",
+    SSA="Sub-Saharan Africa",
+    USA="REJUCAZ",
     World="World"
 )
 ```
@@ -125,7 +130,7 @@ df_plot <- (
     group_by(model, scenario, region, period, variable, unit) %>%
     summarise(value = sum(value)) %>%
     mutate(variable = sub("Production|Industry|Steel|+|", "", variable, fixed = TRUE)) %>%
-    filter(period %in% c(2030, 2040, 2050))
+    filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070))
 )
 show_sample(df_plot)
 ```
@@ -149,7 +154,8 @@ subfig_world <- ggplot(df_plot %>% filter(region == "World"), aes(x = period, y 
     axis.title.y = element_text(size = 6),
     axis.text.y = element_text(size = 5),
     strip.text.x = element_text(size = 6),
-  )
+  ) +
+  scale_fill_manual(values = plotstyle(unique(df_plot$variable)))
 
 # Multiple panels through facet_wrap for all other regions.
 subfig_other <- ggplot(df_plot %>% filter(region != "World"), aes(x = period, y = value, fill = variable)) +
@@ -163,7 +169,8 @@ subfig_other <- ggplot(df_plot %>% filter(region != "World"), aes(x = period, y 
     strip.text.x = element_text(size = 6),
     legend.title = element_text(size = 7),
     legend.text = element_text(size = 6),
-  )
+  ) +
+  scale_fill_manual(values = plotstyle(unique(df_plot$variable)))
 
 # Combine the two into a single figure through grid.arrange.
 fig <- grid.arrange(subfig_world, subfig_other, ncol = 2, widths = c(1, 2))
