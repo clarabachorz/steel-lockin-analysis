@@ -19,21 +19,21 @@ library(purrr)
 ```
 
 ```{R read data, include = FALSE}
-lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
-# lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
+# lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
+lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
 
-fast <- read.csv("./inputdata/other/lcop_avg_fasttrans.csv")
-# fast <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
+# fast <- read.csv("./inputdata/other/lcop_avg_fasttrans.csv")
+fast <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
 
-fast_mif <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif") %>%
-    mutate(scenario = "Fast transition")
-# fast_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>%
+# fast_mif <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif") %>%
 #     mutate(scenario = "Fast transition")
+fast_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>%
+    mutate(scenario = "Fast transition")
 
-lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>% 
-    mutate(scenario = "Lock-in")
-# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif") %>% 
+# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>% 
 #     mutate(scenario = "Lock-in")
+lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif") %>% 
+    mutate(scenario = "Lock-in")
 ```
 
 
@@ -42,18 +42,21 @@ lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820
 ### LOAD DFS AND CLEAN / FILTER RELEVANT DATA
 lockin_lcop_no_em <- lockin %>%
   filter(!component == "Emission Cost") %>% 
-  filter(between(period, 2025, 2070)) %>%
+  #2075 is needed as a time step, since it provides the upper timestep.
+  filter(between(period, 2025, 2075)) %>%
   select(-color)
 
 fast_lcop_no_em <- fast %>%
     filter(!component == "Emission Cost") %>% 
-    filter(between(period, 2025, 2070)) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     select(-color)
 
 fast_mif_prod <- fast_mif %>%
     filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
     filter(unit == "Mt/yr") %>%
-    filter(between(period, 2025, 2070)) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
     mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
     # calculate total production (including scrap EAF)
@@ -64,7 +67,8 @@ fast_mif_prod <- fast_mif %>%
 lockin_mif_prod <- lockin_mif %>%
     filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
     filter(unit == "Mt/yr") %>%
-    filter(between(period, 2025, 2070)) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
     mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
     # calculate total production (including scrap EAF)
@@ -79,7 +83,8 @@ fast_mif_em <- fast_mif %>%
                  variable,
                  ignore.case = TRUE, 
                  fixed = TRUE)) %>%
-    filter(between(period, 2025, 2070)) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     select(-model) %>%
     #add up the different components: solid, liquids ..
     group_by(period, scenario, region) %>%
@@ -95,7 +100,8 @@ lockin_mif_em <- lockin_mif %>%
                  variable,
                  ignore.case = TRUE, 
                  fixed = TRUE)) %>%
-    filter(between(period, 2025, 2070)) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     select(-model) %>%
     #add up the different components: solid, liquids ..
     group_by(period, scenario, region) %>%
@@ -117,7 +123,8 @@ lockin_costs <- lockin_lcop_no_em %>%
     mutate(total_cost = value * total_production) %>%
     mutate(unit = "trUSD") %>% 
     select(-value, -total_production) %>%
-    filter(period >= 2030) %>% 
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>% 
     group_by(period, region) %>%
     summarise(total_cost = sum(total_cost, na.rm = TRUE)) %>%
     ungroup() %>%
@@ -130,7 +137,8 @@ fast_costs <- fast_lcop_no_em %>%
     mutate(total_cost = value * total_production) %>%
     mutate(unit = "trUSD") %>% 
     select(-value, -total_production) %>%
-    filter(period >= 2030) %>%
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>%
     group_by(period, region) %>%
     summarise(total_cost = sum(total_cost, na.rm = TRUE)) %>%
     ungroup() %>%
@@ -144,7 +152,8 @@ fast_costs <- fast_lcop_no_em %>%
 avg_price <- lockin_mif %>%
     filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE)) %>%
     bind_rows(fast_mif %>% filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE))) %>%
-    filter(between(period, 2025, 2070)) %>% 
+    #2075 is needed as a time step, since it provides the upper timestep.
+    filter(between(period, 2025, 2075)) %>% 
     select(-model, -unit) %>%
     mutate(value = value * 1000) %>% #convert to USD/t
     pivot_wider(names_from = scenario, values_from = value) %>% 
@@ -173,7 +182,7 @@ fast_costs_wdemandadjustment <- fast_costs %>%
 ```
 
 ```{R discount costs}
-discount_rate <- 0.05
+discount_rate <- 0.07
 
 #somethign like this
 # if we need to use 2028-2032 for time step 2030, could substract
@@ -190,6 +199,7 @@ lockin_costs_total_discounted <- lockin_costs %>%
   select(-total_cost_lockin) %>%
   # use correct time periods. Earliest time period is 2028.
   mutate(period = period - 2) %>%
+  filter(between(period, 2025, 2070)) %>%
   # multiply by discount factor and take cumulative sum
   arrange(region, period) %>%
   mutate(discounted_cost = value / ((1 + discount_rate) ^ (period - 2025))) %>%
@@ -207,6 +217,7 @@ fast_costs_total_discounted <- fast_costs_wdemandadjustment %>%
     select(-total_cost_fast) %>%
     # use correct time periods. Earliest time period is 2028.
     mutate(period = period - 2) %>%
+    filter(between(period, 2025, 2070)) %>%
     # multiply by discount factor and take cumulative sum
     arrange(region, period) %>%
     mutate(discounted_cost = value / ((1 + discount_rate) ^ (period - 2025))) %>%
@@ -223,6 +234,7 @@ lockin_mif_em_total <- lockin_mif_em %>%
     ungroup() %>%
     select(-yrCO2_lockin) %>%
     mutate(period = period - 2) %>% 
+    filter(between(period, 2025, 2070)) %>%
     group_by(region) %>%
     arrange(period) %>%
     summarise(total_CO2_lockin = sum(value, na.rm = TRUE)) %>%
@@ -238,6 +250,7 @@ fast_mif_em_total <- fast_mif_em %>%
     ungroup() %>%
     select(-yrCO2_fast) %>%
     mutate(period = period - 2) %>% 
+    filter(between(period, 2025, 2070)) %>%
     group_by(region) %>%
     arrange(period) %>%
     summarise(total_CO2_fast = sum(value, na.rm = TRUE)) %>%
@@ -254,7 +267,7 @@ fscp_df <- lockin_costs_total_discounted %>%
 
 
 region_to_aggr = list(
-    # "OASLAM" = c("OAS", "LAM"), #LAM emits more in fast transition. Grouping them gives fscp = 700
+    "OASLAM" = c("OAS", "LAM"), #LAM emits more in fast transition. Grouping them gives fscp = 700
     "EUR+USA+JPN+REF" = c("EUR", "USA", "CAZ", "NEU", "REF", "JPN")
 )
 
@@ -329,8 +342,8 @@ df$xmax <- df$cum_em
 p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = region)) +
   geom_rect(color = "black") +
   labs(
-    title = "Marginal abatement cost: from Extended Lock-in to Fast Transition",
-    # title = "Marginal abatement cost: from NPi to Extended Lock-in",
+    # title = "Marginal abatement cost: from Extended Lock-in to Fast Transition",
+    title = "Marginal abatement cost: from NPi to Extended Lock-in (7% discount rate)",
     x = "Cumulative emission difference (GtCo2)",
     y = "Abatement Cost (USD/tCO2)"
   ) +
@@ -341,22 +354,23 @@ p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = regi
       "EUR" = "#110a9a",
       "EUR+USA+JPN+REF" = "#4870b9",
       "OAS" = "#f6da23",
+      "OASLAM" = "#f6da23",
       "NEU" = "#1ea6f0",
       "REF" = "#b2df8a",
       "USA" = "#33a02c", 
       "JPN" = "#f8f2f2",
       "LAM" = "#a65628",
       "SSA" = "#103b17",
-      "MEA" = "#0bbda5")) +
+      "MEA" = "#0bbda5")) #+
     # add horizontal line with co2 price
-    geom_hline(yintercept = mean_carbon_price, linetype = "dashed", color = "black") +
-    annotate("text", x = 5, y = mean_carbon_price + 20, 
-             label = paste("Average CO2 price in 2050:", round(mean_carbon_price, 0), "USD/tCO2"),
-             color = "black")
+    # geom_hline(yintercept = mean_carbon_price, linetype = "dashed", color = "black") +
+    # annotate("text", x = 5, y = mean_carbon_price + 20, 
+    #          label = paste("Average CO2 price in 2050:", round(mean_carbon_price, 0), "USD/tCO2"),
+    #          color = "black")
     # geom_hline(yintercept = price_carbon$co2_price, linetype = "dashed", color = "black") +
     # annotate("text", x = 30, y = price_carbon$co2_price + 20, 
     #          label = paste("CO2 price in 2050:", round(price_carbon, 0), "USD/tCO2"),
     #          color = "black")
 p
-# ggsave("figs_temp/abatement_costs_steel_ELtoFT.png", p,bg = "white", width = 8, height = 6)
+ggsave("figs_temp/abatement_costs_steel_NPitoEL.png", p,bg = "white", width = 8, height = 6)
 ```
