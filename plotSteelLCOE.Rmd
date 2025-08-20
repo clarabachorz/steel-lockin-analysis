@@ -21,11 +21,11 @@ library(stringr)
 
 ```{r load, echo = FALSE}
 #LOAD GDX
-# max_lockin <- "inputdata/gdx/PolicyExtended-NPi.gdx"
+max_lockin <- "inputdata/gdx/PolicyExtended-NPi.gdx"
 
 # max_lockin <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
 
-max_lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
+# max_lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
 
 ```
 
@@ -190,20 +190,31 @@ df.SEShares = df.demFe  %>%
   mutate(SEShare = demFE / demFETotal) %>%
   select(-demFE, -demFETotal)
 df.priceFuel <- df.priceFuel %>%
-  left_join(df.SEShares, by=c("region", "period", "entySE", "entyFE")) %>%
-  mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) 
+  left_join(df.SEShares, by=c("region", "period", "entySE", "entyFE")) 
+
+
+df.SEprice <- as.quitte(readGDX(gdx, "pm_SEPrice", restore_zeros = F)) %>%
+  filter(period %in% t) %>%
+  select(region, period, all_enty, value) %>%
+  rename(priceSE = value, entySE = all_enty)
 
 #TODO: plot. Also need to get the Co2 emission cost to substract from fossils
-df.biosolidsfrac <- df.priceFuel %>% filter(entyFE == "fesos")  %>% 
-# Check units. This does not seem correct (something wrong with emicosts?)
-# or instead simply use SE costs to get a rough idea
-  left_join(df.emiFac, by=c("region", "period", "entySE", "entyFE")) %>%
-  left_join(df.priceCO2, by = c("region", "period")) %>%
-  mutate(emicost = ifelse(is.na(emiFac), 0, emiFac) * priceCO2) %>%
-  select(-emiFac, -priceCO2)
+df.biosolidsfrac <- df.SEShares %>%
+# df.priceFuel %>% 
+  filter(entyFE == "fesos")  %>% 
+  filter(period > 2025) %>%
+# Using emifac + CO2 prices seems to give strange values
+  # left_join(df.emiFac, by=c("region", "period", "entySE", "entyFE")) %>%
+  # left_join(df.priceCO2, by = c("region", "period")) %>%
+  #   mutate(emicost = ifelse(is.na(emiFac), 0, emiFac) * priceCO2) %>%
+  # select(-emiFac, -priceCO2)
+# instead simply use SE prices to get a rough idea
+  left_join(df.SEprice, by=c("region", "period", "entySE"))
 
 
-df.priceFuel <- df.priceFuel  %>% 
+
+df.priceFuel <- df.priceFuel %>%
+  mutate(priceFuel = priceFuel * replace_na(SEShare, 0.)) %>%
   group_by(region, period, entyFE) %>% 
   summarize(priceFuel = sum(priceFuel)) %>%
   ungroup
@@ -778,6 +789,8 @@ p.drieaf
 #tePrc2route
 df.outflowPrc <- as.quitte(readGDX(gdx, "vm_outflowPrc", field = "l", restore_zeros = F)[,t,]) %>%
     filter(all_te %in% tePrcAll) %>%
+    # filter out secondary dri
+    # filter(opmoPrc != "sec") %>%
     select(region, period, all_te, value, opmoPrc) %>%
     rename(outflowPrc = value) %>%
     # left_join(tePrc2route, by = c("all_te", "opmoPrc")) %>% 
@@ -841,10 +854,12 @@ df.prod_frac <- df.outflowPrc %>%
 
 lcop_weighted <- lcop %>%
   left_join(df.prod_frac, by=c("region", "period", "route")) %>%
-  mutate(value = value * frac)  %>%
-  select(-frac)
+  mutate(value = value * frac)
+
+
 
 lcop_plot <- lcop_weighted %>%
+  select(-frac) %>%
   left_join(route_names, by="route") %>% 
   select(-route) %>% 
   rename(route = route_name) %>%
@@ -853,20 +868,27 @@ lcop_plot <- lcop_weighted %>%
   rename(component = component_name) %>%
   group_by(period, region, component, route) %>%
   summarize(value = sum(value), color=first(color)) %>%
-  ungroup %>%
-  mutate(value = pmax(value, 0.)) # sweep negative prices under the rug
+  ungroup 
+  # %>%
+  # mutate(value = pmax(value, 0.)) # sweep negative prices under the rug
+
+# print(lcop_plot %>% filter(value < 0) %>% arrange(region), n= Inf, width = Inf)
 
 ###save if needed
-write.csv(lcop_plot, file = "./inputdata/other/lcop_avg_npi.csv", row.names = FALSE)
+# write.csv(lcop_plot, file = "./inputdata/other/lcop_avg_npi.csv", row.names = FALSE)
+
+## write csv without sec steel (need to uncomment above)
+# write.csv(lcop_plot, file = "./inputdata/other/lcop_avg_npi_onlypri.csv", row.names = FALSE)
 
 ### continue with lcop plot
 
 lcop_plot$component <- factor(lcop_plot$component, levels=unique(component_names$component_name))
 
 plotted_years1 <- c(2030, 2035, 2040, 2045, 2050, 2055, 2060)
+plotted_regions1 <- c("EUR", "CHA", "USA", "IND")
 
 lcop_plot <- lcop_plot %>%
-  filter(region %in% plotted_regions, period %in% plotted_years1) %>% 
+  filter(region %in% plotted_regions1, period %in% plotted_years1) %>% 
   # mutate(route_id = route %>% as.factor() %>% as.numeric()) %>% 
   # mutate(year_id = period %>% as.factor() %>% as.numeric()) %>% 
   # mutate(n_routes = max(route_id)) %>%
@@ -878,21 +900,6 @@ lcop_plot <- lcop_plot %>%
   rename(region = region_name) %>%
   mutate(region = factor(region, levels=unique(region_names$region_name))) 
 
-# route_label <- lcop_plot %>% 
-#   select(route, pos, region) %>% 
-#   unique()
-
-# year_label <- lcop_plot %>% 
-#   select(period, year_label_pos, region) %>% 
-#   unique()
-
-# routes = unique(route_names$route_name)
-
-
-  
-
-# xmin <- min(lcop_plot$pos) - 1.
-# xmax <- max(lcop_plot$pos) + 1.
 
 
 ###################################################
@@ -903,14 +910,8 @@ lcop_plot <- lcop_plot %>%
 component_names <- component_names %>%
   filter(color %in% unique(lcop_plot$color))
 
-
-comp_non_zero = c("Emission Cost", "Electricity", "Hydrogen", "Non-H2 Gases", "Liquids", "Solids", "Scrap", "Iron Ore", "DRI Pellets", "OPEX", "CAPEX")
-
-regi_non_zero = c("EU", "China", "USA", "India")
-
 lcop_plot <- lcop_plot %>% 
   filter(component %in% unique(component_names$component_name))
-
 
 total_lcop <- lcop_plot %>%
   group_by(period, region) %>%
@@ -925,7 +926,7 @@ p.lcop <- ggplot() +
            aes(x = period, y = value, fill=component)) +
   # xlim(xmin, xmax) +
   geom_text(aes(period, value+40, label = round(value,0), fill = NULL), data = total_lcop) +
-  ylim(-1.,1251) +
+  ylim(-100.,1251) +
   facet_wrap(~region) +
   scale_fill_manual(values=unique(component_names$color)) +
   # geom_text(data=year_label, aes(label = period), x = year_label$year_label_pos, y = -600., size = fs/2.5, parse = T) +
@@ -934,7 +935,7 @@ p.lcop <- ggplot() +
         axis.text.y=element_text(size=fs),
         strip.text = element_text(size = 1.2 * fs)) +
   labs(y = "LCOP [$/t]", fill="Cost Component",
-      x = "Period", title = "Average levelized cost of steel, weighted by production route (Fast transition, 820)")
+      x = "Period", title = "Average levelized cost of steel, weighted by production route (Fast, 820)")
 
 # ggsave(filename = "figs_temp/lcop_avg_fastTransition820.png", width= 8, height = 6, device='png', dpi=300)
 
