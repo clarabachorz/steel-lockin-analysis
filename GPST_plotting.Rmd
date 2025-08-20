@@ -592,7 +592,8 @@ p <- p +
   #           hjust = 1.17, vjust = 0.7,
   #           lineheight = 0.9, size = 3.2)
 p
-ggsave("figs/BOF_emissions_plot_1relining.png", width = 11, height = 8, dpi = 300)
+
+#ggsave("figs/BOF_emissions_plot_1relining.png", width = 11, height = 8, dpi = 300) --> -->
 ```
 
 
