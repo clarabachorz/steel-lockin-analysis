@@ -16,247 +16,236 @@ library(stringr)
 library("quitte")
 library(zoo)
 library(purrr)
+library(openxlsx)
+library(rlang)
 ```
 
 ```{R read data, include = FALSE}
-# lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
-lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
+lockin <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
+# lockin <- read.csv("./inputdata/other/lcop_avg_npi.csv")
 
-# fast <- read.csv("./inputdata/other/lcop_avg_fasttrans.csv")
-fast <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
+fast <- read.csv("./inputdata/other/lcop_avg_fasttrans.csv")
+# fast <- read.csv("./inputdata/other/lcop_avg_lockin.csv")
 
-# fast_mif <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif") %>%
-#     mutate(scenario = "Fast transition")
-fast_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>%
-    mutate(scenario = "Fast transition")
+fast_mif <- read.quitte("inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif") 
+# fast_mif <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif")
 
-# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif") %>% 
-#     mutate(scenario = "Lock-in")
-lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif") %>% 
-    mutate(scenario = "Lock-in")
+lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif") 
+# lockin_mif <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif")
 ```
 
 
 ```{R analyse}
 
-### LOAD DFS AND CLEAN / FILTER RELEVANT DATA
-lockin_lcop_no_em <- lockin %>%
-  filter(!component == "Emission Cost") %>% 
-  #2075 is needed as a time step, since it provides the upper timestep.
-  filter(between(period, 2025, 2075)) %>%
-  select(-color)
+# --- Helper functions for scenario data analysis ---
 
-fast_lcop_no_em <- fast %>%
-    filter(!component == "Emission Cost") %>% 
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    select(-color)
+# Remove emission cost and filter period
+# values are taken up to 2075, and later filtered when calculating cumulative costs
+prepare_lcop_no_em <- function(df) {
+    df %>%
+        filter(!component == "Emission Cost") %>%
+        filter(between(period, 2025, 2075)) %>%
+        select(-color)
+}
 
-fast_mif_prod <- fast_mif %>%
-    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    filter(unit == "Mt/yr") %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
-    # calculate total production (including scrap EAF)
-    group_by(period, scenario, region) %>%
-    summarise(total_production = sum(value, na.rm = TRUE)) %>%
-    ungroup()
+# Summarise total LCO by period and region
+summarise_lcop_total <- function(df) {
+    df %>%
+        group_by(period, region) %>%
+        summarise(value = sum(value, na.rm = TRUE)) %>%
+        ungroup()
+}
 
-lockin_mif_prod <- lockin_mif %>%
-    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    filter(unit == "Mt/yr") %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
-    # calculate total production (including scrap EAF)
-    group_by(period, scenario, region) %>%
-    summarise(total_production = sum(value, na.rm = TRUE)) %>%
-    ungroup()
+# Get total production from mif data
+# values are taken up to 2075, and later filtered when calculating cumulative costs
+get_total_production <- function(mif) {
+    mif %>%
+        filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+        filter(unit == "Mt/yr") %>%
+        filter(between(period, 2025, 2075)) %>%
+        mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
+        mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
+        group_by(period, region) %>%
+        summarise(total_production = sum(value, na.rm = TRUE)) %>%
+        ungroup()
+}
 
+# Get total yearly CO2 emissions from mif data
+get_total_emissions <- function(mif, colname) {
+    mif %>%
+        filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+        filter(between(period, 2025, 2075)) %>%
+        select(-model) %>%
+        group_by(period, region) %>%
+        summarise(total_CO2_yearly = sum(value, na.rm = TRUE)) %>%
+        ungroup() %>%
+        select(period, region, total_CO2_yearly) %>%
+        rename(!!colname := total_CO2_yearly)
+}
 
-fast_mif_em <- fast_mif %>%
-    filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
-                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
-                 variable,
-                 ignore.case = TRUE, 
-                 fixed = TRUE)) %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    select(-model) %>%
-    #add up the different components: solid, liquids ..
-    group_by(period, scenario, region) %>%
-    summarise(total_CO2_yearly = sum(value, na.rm = TRUE),
-          total_CO2_5year = total_CO2_yearly * 5) %>%
-    ungroup() %>%
-    select(period, region, total_CO2_yearly) %>%
-    rename(yrCO2_fast = total_CO2_yearly)
+# Calculate total costs (LCO * production)
+calc_total_costs <- function(lcop_total, prod, cost_col) {
+    lcop_total %>%
+        left_join(prod, by = c("period", "region")) %>%
+        mutate(total_cost = value * total_production) %>%
+        select(-value, -total_production) %>%
+        filter(between(period, 2025, 2075)) %>%
+        rename(!!cost_col := total_cost)
+}
 
-lockin_mif_em <- lockin_mif %>%
-    filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
-                # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
-                 variable,
-                 ignore.case = TRUE, 
-                 fixed = TRUE)) %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    select(-model) %>%
-    #add up the different components: solid, liquids ..
-    group_by(period, scenario, region) %>%
-    summarise(total_CO2_yearly = sum(value, na.rm = TRUE),
-          total_CO2_5year = total_CO2_yearly * 5) %>% 
-    ungroup() %>%
-    select(period, region, total_CO2_yearly) %>%
-    rename(yrCO2_lockin = total_CO2_yearly)
-# lockin_em <- lockin %>%
-#   filter(component == "Emission costs")
+# --- Calculate both scenarios ---
 
-#### CALCULATE COST OF STEEL PRODUCTION (LCO * production)
-## these lcop df exclude direct emission costs (CO2 pricing)
-# NB: prices are missing for 2025, which leads to some NA. SHould only take data from 2030 onwards
-lockin_costs <- lockin_lcop_no_em %>% 
-    left_join(lockin_mif_prod, 
-              by = c("period", "region")) %>%
-    #USD/t * Mt = in million USD.
-    mutate(total_cost = value * total_production) %>%
-    mutate(unit = "trUSD") %>% 
-    select(-value, -total_production) %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>% 
-    group_by(period, region) %>%
-    summarise(total_cost = sum(total_cost, na.rm = TRUE)) %>%
-    ungroup() %>%
-    rename(total_cost_lockin = total_cost)
+# Prepare data for both scenarios using the helper functions
+lockin_lcop_no_em <- prepare_lcop_no_em(lockin)
+fast_lcop_no_em   <- prepare_lcop_no_em(fast)
 
-fast_costs <- fast_lcop_no_em %>%
-    left_join(fast_mif_prod, 
-              by = c("period", "region")) %>%
-    #USD/t * Mt = in million USD.
-    mutate(total_cost = value * total_production) %>%
-    mutate(unit = "trUSD") %>% 
-    select(-value, -total_production) %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>%
-    group_by(period, region) %>%
-    summarise(total_cost = sum(total_cost, na.rm = TRUE)) %>%
-    ungroup() %>%
-    rename(total_cost_fast = total_cost)
+lockin_lcop_no_em_total <- summarise_lcop_total(lockin_lcop_no_em)
+fast_lcop_no_em_total   <- summarise_lcop_total(fast_lcop_no_em)
 
-```	
+lockin_mif_prod <- get_total_production(lockin_mif)
+fast_mif_prod   <- get_total_production(fast_mif)
+
+lockin_mif_em <- get_total_emissions(lockin_mif, "yrCO2_lockin")
+fast_mif_em   <- get_total_emissions(fast_mif, "yrCO2_fast")
+
+lockin_costs <- calc_total_costs(lockin_lcop_no_em_total, lockin_mif_prod, "total_cost_lockin")
+fast_costs   <- calc_total_costs(fast_lcop_no_em_total, fast_mif_prod, "total_cost_fast")
+
+```
 
 ```{R adjust system cost with demand change}
 
-#account for differences in demand by multiplying average cost of the two scenarios with demand difference
-avg_price <- lockin_mif %>%
-    filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    bind_rows(fast_mif %>% filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE))) %>%
-    #2075 is needed as a time step, since it provides the upper timestep.
-    filter(between(period, 2025, 2075)) %>% 
-    select(-model, -unit) %>%
-    mutate(value = value * 1000) %>% #convert to USD/t
-    pivot_wider(names_from = scenario, values_from = value) %>% 
-    mutate(price_average = (`Fast transition`+`Lock-in`)/2) %>% 
-    select(period, region, price_average)
-#calculate production difference
-prod_diff <- fast_mif_prod %>%
-    left_join(lockin_mif_prod, by = c("period", "region")) %>%
-    #production of lock-in scen - production of fast transition scen
-    #(in Mt of steel)
-    mutate(prod_diff = total_production.y - total_production.x) %>%
-    select(period, region, prod_diff)
 
-#multiply. USD/t * Mt = million USD
-demand_value <- avg_price %>%
-    left_join(prod_diff, by = c("period", "region")) %>%
-    mutate(demand_value = price_average * prod_diff) %>%
-    select(period, region, demand_value)
+# account for differences in demand between 2 scenarios
+# by multiplying average cost of the two scenarios with demand difference
+calc_demand_adjustment <- function(lockin_mif, fast_mif, fast_mif_prod, lockin_mif_prod) {
+    
+    avg_price <- lockin_mif %>%
+        mutate(scenario = "Scen1") %>%
+        filter(grepl("CES Function|CES Price|ue_steel_primary", 
+                    variable, ignore.case = TRUE, fixed = TRUE)) %>%
+        bind_rows(fast_mif %>% 
+                    filter(grepl("CES Function|CES Price|ue_steel_primary", 
+                                variable, ignore.case = TRUE, fixed = TRUE)) %>%
+                    mutate(scenario = "Scen2")) %>%
+        #2075 is needed as a time step, since it provides the upper timestep.
+        filter(between(period, 2025, 2075)) %>% 
+        select(-model, -unit) %>%
+        mutate(value = value * 1000) %>% #convert to USD/t
+        pivot_wider(names_from = scenario, values_from = value) %>% 
+        mutate(price_average = (Scen2+Scen1)/2) %>% 
+        select(period, region, price_average)
+    #calculate production difference
+    prod_diff <- fast_mif_prod %>%
+        left_join(lockin_mif_prod, by = c("period", "region")) %>%
+        #production of lock-in scen - production of fast transition scen
+        #(in Mt of steel)
+        mutate(prod_diff = total_production.y - total_production.x) %>%
+        select(period, region, prod_diff)
 
-#add these costs to the fast transition scenario ("loss in societal value due to producing less steel / steel reduced demand comes at an extra cost")
-fast_costs_wdemandadjustment <- fast_costs %>%
-    left_join(demand_value, by = c("period", "region")) %>%
-    mutate(total_cost_fast = total_cost_fast + demand_value) %>%
-    select(-demand_value)
+    #multiply. USD/t * Mt = million USD
+    demand_value <- avg_price %>%
+        left_join(prod_diff, by = c("period", "region")) %>%
+        mutate(demand_value = price_average * prod_diff) %>%
+        select(period, region, demand_value)
+}
 
+
+#add these costs to the fast transition scenario 
+# ("loss in societal value due to producing less steel / steel reduced demand comes at an extra cost")
+add_demand_adjustment <- function(fast_costs, demand_value) {
+    fast_costs %>%
+        left_join(demand_value, by = c("period", "region")) %>%
+        mutate(total_cost_fast = total_cost_fast + demand_value) %>%
+        select(-demand_value)
+}
+
+demand_value <- calc_demand_adjustment(lockin_mif, fast_mif, fast_mif_prod, lockin_mif_prod)
+fast_costs_wdemandadjustment <- add_demand_adjustment(fast_costs, demand_value)
+
+```
+```{R get diagnostics df}
+
+# info df can be used to check the different steps of the calculation
+get_info_df <- function(fast_lcop_no_em_total, lockin_lcop_no_em_total, 
+                    fast_mif_prod, lockin_mif_prod, fast_mif_em, lockin_mif_em) {
+    info_df <- fast_lcop_no_em_total %>%
+        rename(lcop_fast = value) %>%
+        left_join(lockin_lcop_no_em_total %>%
+                rename(lcop_npi = value), 
+                by = c("period", "region")) %>%
+        left_join(fast_mif_prod %>%
+                select(period, region, total_production) %>%
+                rename(total_production_fast = total_production), 
+                by = c("period", "region")) %>%
+        left_join(lockin_mif_prod %>%
+                select(period, region, total_production) %>%
+                rename(total_production_npi = total_production), 
+                by = c("period", "region")) %>% 
+        left_join(fast_mif_em,
+                by = c("period", "region")) %>%
+        left_join(lockin_mif_em %>%
+                    rename(yrCO2_npi = yrCO2_lockin),
+                    by = c("period", "region")) %>%
+        arrange(region, period)
+
+    #save to excel
+    # write.xlsx(info_df, "info_df.xlsx")
+}
 ```
 
 ```{R discount costs}
 discount_rate <- 0.07
+start_date <- 2025
+end_date <- 2070
 
-#somethign like this
-# if we need to use 2028-2032 for time step 2030, could substract
-# from period column (and filter an extra time step in until 2075)
-# as a hacky way to order the values correctly.
+
+calc_cumulated_discounted_sum <- function(lockin_mif_em, start_date, end_date, discount_rate, col_to_sum, final_col_name) {
+    lockin_mif_em %>%
+        group_by(region) %>%
+        complete(period = full_seq(period, 1)) %>%  # Fill every year
+        arrange(region, period) %>%
+        # in million USD, or in MtCO2
+        mutate(value = !!sym(col_to_sum)) %>%
+        fill(value, .direction = "down") %>%
+        ungroup() %>%
+        select(-all_of(col_to_sum)) %>%
+        # correct time period. 2025 = 2023-2028 in REMIND
+        mutate(period = period - 2) %>% 
+        filter(between(period, start_date, end_date)) %>%
+        arrange(region, period) %>%
+        #discount rate set to 0 for emissions
+        mutate(discounted_value = value / ((1 + discount_rate) ^ (period - start_date))) %>%
+        group_by(region) %>%
+        summarise(!!final_col_name := sum(discounted_value, na.rm = TRUE)) %>%
+        ungroup()
+}
+
 # still in million USD
-lockin_costs_total_discounted <- lockin_costs %>%
-  group_by(region) %>%
-  complete(period = full_seq(period, 1)) %>%  # Fill every year
-  arrange(region, period) %>%
-  mutate(value = total_cost_lockin) %>%
-  fill(value, .direction = "down") %>%
-  ungroup() %>% 
-  select(-total_cost_lockin) %>%
-  # use correct time periods. Earliest time period is 2028.
-  mutate(period = period - 2) %>%
-  filter(between(period, 2025, 2070)) %>%
-  # multiply by discount factor and take cumulative sum
-  arrange(region, period) %>%
-  mutate(discounted_cost = value / ((1 + discount_rate) ^ (period - 2025))) %>%
-  group_by(region) %>%
-  summarise(total_cost_lockin = sum(discounted_cost, na.rm = TRUE)) %>%
-  ungroup()
+# we discount these costs
+lockin_costs_total_discounted <- calc_cumulated_discounted_sum(lockin_costs,
+                                                            start_date, end_date,
+                                                            discount_rate,
+                                                            "total_cost_lockin", "total_cost_lockin")
 
-fast_costs_total_discounted <- fast_costs_wdemandadjustment %>%
-    group_by(region) %>%
-    complete(period = full_seq(period, 1)) %>%  # Fill every year
-    arrange(region, period) %>%
-    mutate(value = total_cost_fast) %>%
-    fill(value, .direction = "down") %>%
-    ungroup() %>% 
-    select(-total_cost_fast) %>%
-    # use correct time periods. Earliest time period is 2028.
-    mutate(period = period - 2) %>%
-    filter(between(period, 2025, 2070)) %>%
-    # multiply by discount factor and take cumulative sum
-    arrange(region, period) %>%
-    mutate(discounted_cost = value / ((1 + discount_rate) ^ (period - 2025))) %>%
-    group_by(region) %>%
-    summarise(total_cost_fast = sum(discounted_cost, na.rm = TRUE)) %>%
-    ungroup()
+fast_costs_total_discounted <- calc_cumulated_discounted_sum(fast_costs_wdemandadjustment,
+                                                            start_date, end_date,
+                                                            discount_rate,
+                                                            "total_cost_fast", "total_cost_fast")
 
-lockin_mif_em_total <- lockin_mif_em %>%
-    group_by(region) %>%
-    complete(period = full_seq(period, 1)) %>%  # Fill every year
-    arrange(region, period) %>%
-    mutate(value = yrCO2_lockin) %>%
-    fill(value, .direction = "down") %>%
-    ungroup() %>%
-    select(-yrCO2_lockin) %>%
-    mutate(period = period - 2) %>% 
-    filter(between(period, 2025, 2070)) %>%
-    group_by(region) %>%
-    arrange(period) %>%
-    summarise(total_CO2_lockin = sum(value, na.rm = TRUE)) %>%
-    ungroup() 
+# we only discount costs, not emissions. Therefore discount rate is 0.
+lockin_mif_em_total <- calc_cumulated_discounted_sum(lockin_mif_em, 
+                                    start_date, end_date,
+                                    discount_rate = 0,
+                                    "yrCO2_lockin", "total_CO2_lockin")
 
+fast_mif_em_total <- calc_cumulated_discounted_sum(fast_mif_em,
+                                start_date, end_date,
+                                discount_rate = 0, 
+                                "yrCO2_fast", "total_CO2_fast")
 
-fast_mif_em_total <- fast_mif_em %>%
-    group_by(region) %>%
-    complete(period = full_seq(period, 1)) %>%  # Fill every year
-    arrange(region, period) %>%
-    mutate(value = yrCO2_fast) %>%
-    fill(value, .direction = "down") %>%
-    ungroup() %>%
-    select(-yrCO2_fast) %>%
-    mutate(period = period - 2) %>% 
-    filter(between(period, 2025, 2070)) %>%
-    group_by(region) %>%
-    arrange(period) %>%
-    summarise(total_CO2_fast = sum(value, na.rm = TRUE)) %>%
-    ungroup()
-
-# million USD / MtCO2 = USD/tCO2
+# Calculate fscp based on results
+# Units: million USD / MtCO2 = USD/tCO2
 fscp_df <- lockin_costs_total_discounted %>%
     left_join(fast_costs_total_discounted, by = "region") %>%
     left_join(lockin_mif_em_total, by = "region") %>%
@@ -265,87 +254,66 @@ fscp_df <- lockin_costs_total_discounted %>%
            (total_CO2_lockin - total_CO2_fast)) %>% 
     mutate(em_diff = total_CO2_lockin - total_CO2_fast)
 
+# Aggregate regions according to region_to_aggr
+aggregate_regions <- function(df, region_to_aggr) {
+    grouped_df <- imap_dfr(region_to_aggr, function(regions, new_region) {
+        df %>%
+            filter(region %in% regions) %>%
+            summarise(
+                region = new_region,
+                total_cost_lockin = sum(total_cost_lockin, na.rm = TRUE),
+                total_cost_fast = sum(total_cost_fast, na.rm = TRUE),
+                total_CO2_lockin = sum(total_CO2_lockin, na.rm = TRUE),
+                total_CO2_fast = sum(total_CO2_fast, na.rm = TRUE)
+            ) %>% 
+            mutate(
+                fscp = (total_cost_fast - total_cost_lockin) / 
+                    (total_CO2_lockin - total_CO2_fast),
+                em_diff = total_CO2_lockin - total_CO2_fast
+            )
+    })
+
+    new_regions_flattened <- unlist(region_to_aggr, use.names = FALSE)
+    fscp_df_grouped <- df %>%
+        filter(!region %in% new_regions_flattened) %>%
+        bind_rows(grouped_df)
+}
 
 region_to_aggr = list(
     "OASLAM" = c("OAS", "LAM"), #LAM emits more in fast transition. Grouping them gives fscp = 700
     "EUR+USA+JPN+REF" = c("EUR", "USA", "CAZ", "NEU", "REF", "JPN")
 )
 
+fscp_df_grouped <- aggregate_regions(fscp_df, region_to_aggr)
 
-grouped_df <- imap_dfr(region_to_aggr, function(regions, new_region) {
-    fscp_df %>%
-        filter(region %in% regions) %>%
-        summarise(
-            region = new_region,
-            total_cost_lockin = sum(total_cost_lockin, na.rm = TRUE),
-            total_cost_fast = sum(total_cost_fast, na.rm = TRUE),
-            total_CO2_lockin = sum(total_CO2_lockin, na.rm = TRUE),
-            total_CO2_fast = sum(total_CO2_fast, na.rm = TRUE)
-        ) %>% 
-        mutate(
-            fscp = (total_cost_fast - total_cost_lockin) / 
-                   (total_CO2_lockin - total_CO2_fast),
-            em_diff = total_CO2_lockin - total_CO2_fast
-        )
-})
-
-new_regions_flattened <- flatten(region_to_aggr)
-fscp_df_grouped <- fscp_df %>%
-    filter(!region %in% new_regions_flattened) %>%
-    bind_rows(grouped_df)
-
-#currently not used: global abatement cost
-fscp_df_global <- fscp_df %>%
-    select(-fscp) %>%
-    summarise(across(starts_with("total_cost"), sum, na.rm = TRUE),
-              across(starts_with("total_CO2"), sum, na.rm = TRUE)) %>%
-    mutate(fscp = (total_cost_fast - total_cost_lockin) /
-              (total_CO2_lockin - total_CO2_fast))
-print(fscp_df %>% filter(region == "EUR"), width  = Inf)
-# these cost are given per year. We also take the co2 emissions per year to get an abatement cost
 ```
-
 
 ```{R plot}
 
-#get co2 price
-price_carbon <- fast_mif %>%
-    filter(variable == "Price|Carbon") %>%
-    filter(period == 2050) %>%
-    summarise(co2_price = mean(value, na.rm = TRUE))
-
-price_carbon2 <- lockin_mif %>%
-    filter(variable == "Price|Carbon") %>%
-    filter(period == 2050) %>%
-    summarise(co2_price = mean(value, na.rm = TRUE))
-
-mean_carbon_price <- mean(c(price_carbon$co2_price, price_carbon2$co2_price))
-
 df <- fscp_df_grouped %>%
     select(region, fscp, em_diff) %>%
-    # mutate(region = factor(region, levels = c("CHN", "USA", "EU", "IND", "JPN", "RUS", "BRA", "ZAF"))) %>%
     arrange(region) %>%
-    filter(em_diff > 0) %>% # Filter out regions with more emissions in fast transition (only small regions)
+    # Filter out regions with more emissions in fast transition (only small regions)
+    filter(em_diff > 0) %>%
     mutate(em_diff = em_diff / 1000) # Convert to GtCO2
+
 # Sort by fscp from lower to higher
 df <- df[order(df$fscp), ]
-
 # Preserve region order based on sorted fscp
 df$region <- factor(df$region, levels = df$region)
-
 # Create cumulative x position for area plot
 df$cum_em <- cumsum(df$em_diff)
 df$xmin <- df$cum_em - df$em_diff
 df$xmax <- df$cum_em
 
-# Plot Abatement Cost Curve with area bars by region color
+# plot abatement costs
 p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = region)) +
   geom_rect(color = "black") +
   labs(
     # title = "Marginal abatement cost: from Extended Lock-in to Fast Transition",
-    title = "Marginal abatement cost: from NPi to Extended Lock-in (7% discount rate)",
+    title = paste("Average abatement costs: from NPi to Fast Transition (discount rate:", discount_rate * 100, "%, dates:", start_date, "-", end_date, ")"),
     x = "Cumulative emission difference (GtCo2)",
-    y = "Abatement Cost (USD/tCO2)"
+    y = "Average abatement cost (USD/tCO2)"
   ) +
   theme_minimal() +
     scale_fill_manual(values = c(
@@ -361,16 +329,7 @@ p <- ggplot(df, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = fscp, fill = regi
       "JPN" = "#f8f2f2",
       "LAM" = "#a65628",
       "SSA" = "#103b17",
-      "MEA" = "#0bbda5")) #+
-    # add horizontal line with co2 price
-    # geom_hline(yintercept = mean_carbon_price, linetype = "dashed", color = "black") +
-    # annotate("text", x = 5, y = mean_carbon_price + 20, 
-    #          label = paste("Average CO2 price in 2050:", round(mean_carbon_price, 0), "USD/tCO2"),
-    #          color = "black")
-    # geom_hline(yintercept = price_carbon$co2_price, linetype = "dashed", color = "black") +
-    # annotate("text", x = 30, y = price_carbon$co2_price + 20, 
-    #          label = paste("CO2 price in 2050:", round(price_carbon, 0), "USD/tCO2"),
-    #          color = "black")
+      "MEA" = "#0bbda5"))
 p
-ggsave("figs_temp/abatement_costs_steel_NPitoEL.png", p,bg = "white", width = 8, height = 6)
+# ggsave("figs_temp/abatement_costs_steel_NPitoEL.png", p,bg = "white", width = 8, height = 6)
 ```
