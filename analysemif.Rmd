@@ -9,32 +9,30 @@ require(ggplot2)
 require(tidyverse)
 require(mrremind)
 require(magclass)
-library(waterfalls)
-require("quitte")
+require(waterfalls)
 
-library("quitte")
 library(dplyr)
 library(gridExtra)
 library(grid)
 library(purrr)
+library(waterfalls)
+
+
+require("quitte")
+library("quitte")
 ```
 
 ```{R load data}
-mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-NPi.mif")
+library("quitte")
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif")
 
-mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif")
+mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif")
 
-mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif")
+mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif")
 
-
-# mifdata4 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-PkBudg820.mif")
-
-
-# write.csv(mifdata11, "primary_steel_prod_default.csv")
 
 mifdata1 <- mifdata1 %>%
   mutate(scenario = "NPi")
-  # mutate(scenario = "Policy Extended Transition")
 
 mifdata2 <- mifdata2 %>%
   mutate(scenario = "Fast transition")
@@ -42,162 +40,8 @@ mifdata2 <- mifdata2 %>%
 mifdata3 <- mifdata3 %>%
   mutate(scenario = "Extended lock-in")
 
-# mifdata4 <- mifdata4 %>%
-#   mutate(scenario = "Green Policy")
-
-
-
 ```
 
-```{R plot params, echo = FALSE}	
-
-fs = 10 # font size
-
-steel_route <- tribble(
-  ~route,          ~route_name, ~color,
-  "DRI-NG-EAF-CCS", "DRI-EAF NG CCS",    "#8fd1af",
-  "DRI-NG-EAF",     "DRI-EAF NG",    "#06b429",
-  "DRI-H2-EAF",     "DRI-EAF H2",    "#17cff0",
-    "BF-BOF-CCS",     "BF-BOF CCS",    "#a0a0a0",
-  "BF-BOF",         "BF-BOF",    "#080808",
-  "SCRAP-EAF",        "Scrap EAF",   "#fbd30d",
-)
-```
-
-```{R change data, echo = FALSE}
-
-base_list <- list(mifdata1, mifdata2, mifdata3)
-# india_list <- list(mifdata3, mifdata4)
-# test_list <- list(mifdata2, mifdata4)
-
-
-
-#filter breakdown of steel production
-process_data <- function(df) {
-  df %>%
-    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    filter(region == "World", unit == "Mt/yr") %>%
-    filter(between(period, 2020, 2100)) %>%
-    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
-    filter(variable != "SCRAP-EAF") #remove secondary steel
-}
-
-process_data_ccs <- function(df) {
-  df %>%
-    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    filter(between(period, 2020, 2100)) %>%
-    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
-    filter(variable != "SCRAP-EAF") #remove secondary steel
-}
-
-process_data_lockin <- function(df) {
-  df %>%
-    filter(grepl("Production|Industry|Steel|+", variable, ignore.case = TRUE, fixed = TRUE)) %>%
-    filter(region == "World", unit == "Mt/yr") %>%
-    filter(between(period, 2020, 2100)) %>%
-    mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
-    mutate(variable = sub("^\\|\\|\\|\\+\\|", "", variable, fixed = FALSE)) %>%
-    filter(variable != "SCRAP-EAF") #remove secondary steel
-}
-
-
-```
-
-```{R plot global barplots}
-
-target_labels <- list(
-  "1.5C" = "Steel sector transition for a 1.5°C target (with overshoot)",
-  "WB2C" = "Steel sector transition for a well below 2°C target"
-)
-
-target_labeller = function(variable, value) {
-  return(target_labels[value])
-}
-
-route_colors <- setNames(steel_route$color, steel_route$route)
-
-mainscens_df_plot <- mainscens_df %>%
-  filter(period %in% c(2020,2025, 2030, 2035, 2040, 2045, 2050, 2055,2060)) %>%
-  # filter(grepl("1.5C", scenario, ignore.case = TRUE, fixed = TRUE)) %>%
-  mutate(
-    target = str_extract(scenario, "1\\.5C|WB2C"),
-    scenario_clean = gsub("\\(1\\.5C\\)|\\(WB2C\\)", "", scenario),
-    period_scenario = paste(period, scenario_clean)
-    ) %>%
-  arrange(period, scenario) %>%
-  mutate(
-  period_scenario = factor(period_scenario, levels = unique(period_scenario)),
-  target = factor(target, levels = c("1.5C", "WB2C"))
-  )
-
-
-scenario_x_offsets <- mainscens_df_plot %>%
-  distinct(scenario_clean) %>%
-  arrange(scenario_clean) %>%
-  mutate(offset = seq(-0.8,0.8,length.out = n()))
-
-mainscens_df_plot <- mainscens_df_plot %>%
-  left_join(scenario_x_offsets, by = "scenario_clean") %>%
-  mutate(xpos = as.numeric(period) + offset)
-
-# custom x labels
-xlabels_df <- mainscens_df_plot %>%
-  distinct(xpos, scenario_clean)
-
-#dates
-dates_df <- mainscens_df_plot %>%
-  filter(target == "WB2C") %>%
-  group_by(period,target) %>%
-  summarise(x= mean(xpos)) %>%
-  mutate(
-    grob = lapply(period, function(lbl){
-      textGrob(lbl, gp = gpar(fontsize = fs+2, fontface = "bold"))
-    }),
-    xmin = x - 1.9,
-    xmax = x + 0.5,
-    ymin = -960,
-    ymax = -960,
-  )
-
-# ggplot(mainscens_df_plot, aes(x=period_scenario, y = value, fill = variable)) +
-p <- ggplot(mainscens_df_plot, aes(x = xpos, y = value, fill = variable)) +
-  geom_bar(
-    stat = "identity",
-    ) +
-  scale_fill_manual(values = route_colors) +
-  facet_wrap(~target, ncol = 1, labeller = target_labeller) +
-  scale_x_continuous(
-    breaks = xlabels_df$xpos,
-    labels = xlabels_df$scenario_clean,
-    expand = c(0, 0)
-  ) +
-  labs(
-    x = "Scenario and period",
-    y = "Steel production (Mt/yr)",
-    fill = "Production route") +
-  theme_bw(base_size = fs+5) +
-  theme(
-    axis.text.x = element_text(angle = 60, hjust = 1),
-    plot.margin = margin(10, 10, 30, 10),
-    axis.title.x = element_text(margin = margin(t = 25)),
-    strip.text = element_text(size = fs+3, face = "bold"),
-  ) +
-  coord_cartesian(clip = "off")
-
-for (i in seq_len(nrow(dates_df))) {
-  p <- p + annotation_custom(
-    dates_df$grob[[i]],
-    xmin = dates_df$xmin[i],
-    xmax = dates_df$xmax[i],
-    ymin = dates_df$ymin[i],
-    ymax = dates_df$ymax[i]
-  )
-}
-p
-# ggsave("figs_temp/steel_production_scenarios.png", width = 12, height = 10, dpi = 300)
-```
 
 ```{R calc cumu em}
 calc_cumuem <- function(df, region_to_calculate) {
@@ -238,74 +82,21 @@ calc_em <- function(df) {
           total_CO2_5year = total_CO2_yearly * 5)
 }
 
-# ccsscen_emi_df <- ccs_list %>%
-#   map_dfr(calc_cumuem) 
-
-mainscens_df_emi <- base_list %>%
-  map_dfr(calc_cumuem, region_to_calculate = "World")
-
-mainscens_df_emi_notcumu <- base_list %>%
-  map_dfr(calc_em)
-
-indiascens_df_emi <- india_list %>%
-  map_dfr(calc_cumuem, region_to_calculate = "IND")
-
-indiascens_df_emi_notcumu <- india_list %>%
-  map_dfr(calc_em)
-
-testscens_df_eminotcumu <- test_list %>%
-  map_dfr(calc_em)
-
 ```
 
-```{R cascacde cumulative emissions}
+```{R define lists}
 
 #add groups here
 region_groups <- list(
-  "OAS+LAM" = c("OAS", "LAM"),
+  "OASLAM" = c("OAS", "LAM"),
   "EUR+NEU+USA+JPN+REF+CAZ" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ")
 )
 
-end_year <- 2070
-
-#map regions
-region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
-                      unlist(region_groups))
-
-
-
-# Prepare data with total cumulative emissions and region contributions
-plot_df <- mainscens_df_emi_notcumu %>%
-  filter(region != "World") %>%
-  #here: fill missing timesteps to really calculate between 2025 and 2070 ( and not between 2023 and 2072)
-  group_by(region, scenario) %>%
-  complete(period = full_seq(period, 1)) %>%  # Fill every year
-  arrange(scenario, region, period) %>%
-  mutate(value = total_CO2_yearly) %>%
-  fill(value, .direction = "down") %>%
-  ungroup() %>%
-  select(-total_CO2_yearly, -total_CO2_5year) %>%
-  mutate(period = period - 2) %>% 
-  filter(between(period, 2025, 2070)) %>%
-  #group regions and add them up
-  mutate(region = as.character(region)) %>%
-  mutate(region = ifelse(region %in% names(region_map), region_map[region], region)) %>%
-  group_by(region, scenario, period) %>%
-  summarise(value = sum(value), .groups = "drop") %>%
-  #resume with cumulative emissions calculation
-  group_by(region, scenario) %>%
-  arrange(period) %>%
-  mutate(cumuCO2 = cumsum(value)) %>%
-  ungroup() %>%
-  arrange(region, scenario, period) %>%
-  filter(period == end_year) %>%
-  mutate(cumuCO2 = cumuCO2 / 1e3) # Convert to Gt CO2
-print(plot_df %>% filter(period > 2069))
 region_order = c(
   "CHA" = "#e41818",
   "IND"="#e48108",
   "OAS"="#c9b60d",
-  "OAS+LAM" = "#c9b60d",
+  "OASLAM" = "#c9b60d",
   "SSA"="#0dc90d",
   "REF"="#aac90d",
   "LAM"="#c90dbc",
@@ -317,213 +108,252 @@ region_order = c(
   "NEU"="#c9b60d",
   "CAZ"="#08e4a0")
 
-#get region colors from list above
-region_colors <- c(
-  "NPi" = "grey", "Extended lock-in" = "grey", "Fast transition" = "grey",
-  region_order,
-  setNames(region_order, paste0(names(region_order), "_2"))
-)
-
-plot_df$region <- factor(plot_df$region, levels = names(region_order))
-plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Extended lock-in", "Fast transition"))
-
-# Get total emissions by scenario
-total_df <- plot_df %>%
-  group_by(scenario) %>%
-  summarise(total = sum(cumuCO2), .groups = "drop")
-
-# Compute differences between scenarios by region for the cascade
-cascade_df <- plot_df %>%
-  select(region, scenario, cumuCO2) %>%
-  mutate(region = factor(region, levels = names(region_order))) %>%
-  arrange(region, scenario) %>%
-  group_by(region) %>%
-  mutate(diff = cumuCO2 - lag(cumuCO2, default = first(cumuCO2))) %>%
-  ungroup()
-
-# Build waterfall data: baseline total, region contributions, final totals
-waterfall_data <- bind_rows(
-  tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
-  cascade_df %>% filter(scenario == "Extended lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
-  # tibble(label = "Extended lock-in", value = total_df$total[total_df$scenario == "Extended lock-in"], type = "total"),
-  tibble(label = "Extended lock-in", value = FALSE, type = "total"),
-  cascade_df %>% filter(scenario == "Fast transition") %>%
-    mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
-    select(label, value, type),
-  # tibble(label = "Fast transition", value = total_df$total[total_df$scenario == "Fast transition"], type = "total")
-  tibble(label = "Fast transition", value = 0, type = "total")
-)
-
-waterfall_data <- waterfall_data %>%
-  mutate(color = region_colors[label]) %>%
-  #remove useless "0" for the scenario totals
-  mutate(label2 = ifelse(type == "total", "", paste0(round(value, 1)))) %>%
-  #remove "_2" with hacky extra space:
-  # mutate(label = gsub("_2", " ", label)) %>%
-  select(label, value, type, label2, color) %>%
-  mutate(label = factor(label, levels = names(region_colors)))
-
-# custom x ticks
-labels_vec <- as.character(waterfall_data$label)
-labels_vec <- ifelse(labels_vec %in% c("NPi", "Extended lock-in", "Fast transition"), labels_vec, " ")
-
-
-# Create waterfall chart using ggwaterfall
-wf_plot <- waterfall(waterfall_data, 
-          rect_text_labels =waterfall_data$label2,
-          fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
-  # scale_x_discrete(labels = label_fun)+
-  labs(
-    title = "Breakdown of cumulative CO2 Emissions from steel production in 2070 (2025 to 2070)",
-    x = "Scenario",
-    y = "Cumulative emissions (Gt CO2)",
-    fill = "Region"
-  ) +
-  theme_bw(base_size = 14)
-
-plot_df <- plot_df %>%
-  filter(period == end_year) %>%
-  #need to specify xpos for the cumulative emissions bars (stacked)
-  mutate(x_pos = ifelse(scenario == "NPi", 1, 
-                        ifelse(scenario == "Extended lock-in", 8, 15)))
-
-wf_plot +
-  geom_bar(data = plot_df,
-          aes(x = x_pos, y = cumuCO2, fill = region), 
-          width = 0.7,position="stack", stat="identity", alpha = 0.8, color = "black") +
-  scale_fill_manual(values =region_colors) +
-  scale_x_discrete(labels = labels_vec) +
-  theme(
-    panel.border = element_blank(),
-    panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
-    panel.grid.minor = element_blank(),
-    axis.ticks = element_blank()) 
-  #sub in basic grey bars instead
-  # geom_col(data = total_df %>% filter(scenario == "Extended lock-in"),
-  #          aes(x = 14, y = total),
-  #          fill = "grey", color = "black", width = 0.7) +
-  # geom_col(data = total_df %>% filter(scenario == "Fast transition"),
-  #          aes(x = 27, y = total),
-  #          fill = "grey", color = "black", width = 0.7)
-
-# ggsave("figs_temp/cascade_cumu_emi_scen.png", width = 12, height = 8, dpi = 300)
+base_list <- list(mifdata1, mifdata2, mifdata3)
 
 ```
 
+```{R cascade cumulative emissions}
 
-```{R cascacde yearly emissions}
+plot_cascade_cumuem <- function(miflist) {
+  end_year <- 2070
 
-
-region_order = c(
-  "CHA" = "#e41818",
-  "IND"="#e48108",
-  "OAS"="#c9b60d",
-  "SSA"="#0dc90d",
-  "REF"="#aac90d",
-  "LAM"="#c90dbc",
-  "JPN"="#d4c7b1",
-  "MEA"="#8340c2",
-  "USA"="#08a0e4",
-  "EUR"="#484eb9",
-  "NEU"="#c9b60d",
-  "CAZ"="#08e4a0")
+  #map regions
+  region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
+                        unlist(region_groups))
 
 
-#get region colors from list above
-region_colors <- c(
-  "NPi" = "grey", "Extended lock-in" = "grey", "Fast transition" = "grey",
-  region_order,
-  setNames(region_order, paste0(names(region_order), "_2"))
-)
+  base_list <- list(mifdata1, mifdata2, mifdata3)
+
+  mainscens_df_emi_notcumu <- base_list %>%
+    map_dfr(calc_em)
+
+  # Prepare data with total cumulative emissions and region contributions
+  plot_df <- mainscens_df_emi_notcumu %>%
+    filter(region != "World") %>%
+    #here: fill missing timesteps to really calculate between 2025 and 2070 ( and not between 2023 and 2072)
+    group_by(region, scenario) %>%
+    complete(period = full_seq(period, 1)) %>%  # Fill every year
+    arrange(scenario, region, period) %>%
+    mutate(value = total_CO2_yearly) %>%
+    fill(value, .direction = "down") %>%
+    ungroup() %>%
+    select(-total_CO2_yearly, -total_CO2_5year) %>%
+    mutate(period = period - 2) %>% 
+    filter(between(period, 2025, 2070)) %>%
+    #group regions and add them up
+    mutate(region = as.character(region)) %>%
+    mutate(region = ifelse(region %in% names(region_map), region_map[region], region)) %>%
+    group_by(region, scenario, period) %>%
+    summarise(value = sum(value), .groups = "drop") %>%
+    #resume with cumulative emissions calculation
+    group_by(region, scenario) %>%
+    arrange(period) %>%
+    mutate(cumuCO2 = cumsum(value)) %>%
+    ungroup() %>%
+    arrange(region, scenario, period) %>%
+    filter(period == end_year) %>%
+    mutate(cumuCO2 = cumuCO2 / 1e3) # Convert to Gt CO2
 
 
-# Prepare data with total cumulative emissions and region contributions
-plot_df <- mainscens_df_emi_notcumu %>%
-  filter(region != "World") %>%
-  select(period, scenario, region, total_CO2_yearly) %>%
-  filter(period == 2050) %>%
-  mutate(total_CO2_yearly = total_CO2_yearly / 1e3) # Convert to Gt CO2
+  #get region colors from list above
+  region_colors <- c(
+    "NPi" = "grey", "Extended lock-in" = "grey", "Fast transition" = "grey",
+    region_order,
+    setNames(region_order, paste0(names(region_order), "_2"))
+  )
+
+  plot_df$region <- factor(plot_df$region, levels = names(region_order))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Extended lock-in", "Fast transition"))
+
+  # Get total emissions by scenario
+  total_df <- plot_df %>%
+    group_by(scenario) %>%
+    summarise(total = sum(cumuCO2), .groups = "drop")
+
+  # Compute differences between scenarios by region for the cascade
+  cascade_df <- plot_df %>%
+    select(region, scenario, cumuCO2) %>%
+    mutate(region = factor(region, levels = names(region_order))) %>%
+    arrange(region, scenario) %>%
+    group_by(region) %>%
+    mutate(diff = cumuCO2 - lag(cumuCO2, default = first(cumuCO2))) %>%
+    ungroup()
+
+  # Build waterfall data: baseline total, region contributions, final totals
+  waterfall_data <- bind_rows(
+    tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
+    cascade_df %>% filter(scenario == "Extended lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
+    # tibble(label = "Extended lock-in", value = total_df$total[total_df$scenario == "Extended lock-in"], type = "total"),
+    tibble(label = "Extended lock-in", value = FALSE, type = "total"),
+    cascade_df %>% filter(scenario == "Fast transition") %>%
+      mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
+      select(label, value, type),
+    # tibble(label = "Fast transition", value = total_df$total[total_df$scenario == "Fast transition"], type = "total")
+    tibble(label = "Fast transition", value = 0, type = "total")
+  )
+
+  waterfall_data <- waterfall_data %>%
+    mutate(color = region_colors[label]) %>%
+    #remove useless "0" for the scenario totals
+    mutate(label2 = ifelse(type == "total", "", paste0(round(value, 1)))) %>%
+    #remove "_2" with hacky extra space:
+    # mutate(label = gsub("_2", " ", label)) %>%
+    select(label, value, type, label2, color) %>%
+    mutate(label = factor(label, levels = names(region_colors)))
+
+  # custom x ticks
+  labels_vec <- as.character(waterfall_data$label)
+  labels_vec <- ifelse(labels_vec %in% c("NPi", "Extended lock-in", "Fast transition"), labels_vec, " ")
 
 
-plot_df$region <- factor(plot_df$region, levels = names(region_order))
-plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Extended lock-in", "Fast transition"))
+  # Create waterfall chart using ggwaterfall
+  wf_plot <- waterfall(waterfall_data, 
+            rect_text_labels =waterfall_data$label2,
+            fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
+    # scale_x_discrete(labels = label_fun)+
+    labs(
+      title = "Breakdown of cumulative CO2 Emissions from steel production in 2070 (2025 to 2070)",
+      x = "Scenario",
+      y = "Cumulative emissions (Gt CO2)",
+      fill = "Region"
+    ) +
+    theme_bw(base_size = 14)
 
-# Get total emissions by scenario
-total_df <- plot_df %>%
-  group_by(scenario) %>%
-  summarise(total = sum(total_CO2_yearly), .groups = "drop")
+  plot_df <- plot_df %>%
+    filter(period == end_year) %>%
+    #need to specify xpos for the cumulative emissions bars (stacked)
+    mutate(x_pos = ifelse(scenario == "NPi", 1, 
+                          ifelse(scenario == "Extended lock-in", 8, 15)))
 
-# Compute differences between scenarios by region for the cascade
-cascade_df <- plot_df %>%
-  select(region, scenario, total_CO2_yearly) %>%
-  mutate(region = factor(region, levels = names(region_order))) %>%
-  arrange(region, scenario) %>%
-  group_by(region) %>%
-  mutate(diff = total_CO2_yearly - lag(total_CO2_yearly, default = first(total_CO2_yearly))) %>%
-  ungroup()
-
-# Build waterfall data: baseline total, region contributions, final totals
-waterfall_data <- bind_rows(
-  tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
-  cascade_df %>% filter(scenario == "Extended lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
-  # tibble(label = "Extended lock-in", value = total_df$total[total_df$scenario == "Extended lock-in"], type = "total"),
-  tibble(label = "Extended lock-in", value = FALSE, type = "total"),
-  cascade_df %>% filter(scenario == "Fast transition") %>%
-    mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
-    select(label, value, type),
-  # tibble(label = "Fast transition", value = total_df$total[total_df$scenario == "Fast transition"], type = "total")
-  tibble(label = "Fast transition", value = 0, type = "total")
-)
-
-waterfall_data <- waterfall_data %>%
-  mutate(color = region_colors[label]) %>%
-  #remove useless "0" for the scenario totals
-  mutate(label2 = ifelse(type == "total", "", paste0(round(value, 1)))) %>%
-  #remove "_2" with hacky extra space:
-  # mutate(label = gsub("_2", " ", label)) %>%
-  select(label, value, type, label2, color) %>%
-  mutate(label = factor(label, levels = names(region_colors)))
-
-# custom x ticks
-labels_vec <- as.character(waterfall_data$label)
-labels_vec <- ifelse(labels_vec %in% c("NPi", "Extended lock-in", "Fast transition"), labels_vec, " ")
+  wf_plot <- wf_plot +
+    geom_bar(data = plot_df,
+            aes(x = x_pos, y = cumuCO2, fill = region), 
+            width = 0.7,position="stack", stat="identity", alpha = 0.8, color = "black") +
+    scale_fill_manual(values =region_colors) +
+    scale_x_discrete(labels = labels_vec) +
+    theme(
+      panel.border = element_blank(),
+      panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank()) 
+    #sub in basic grey bars instead
+    # geom_col(data = total_df %>% filter(scenario == "Extended lock-in"),
+    #          aes(x = 14, y = total),
+    #          fill = "grey", color = "black", width = 0.7) +
+    # geom_col(data = total_df %>% filter(scenario == "Fast transition"),
+    #          aes(x = 27, y = total),
+    #          fill = "grey", color = "black", width = 0.7)
+  print(wf_plot)
+  ggsave("figs_temp/cascade_cumu_emi_scen.png", wf_plot, width = 12, height = 8, dpi = 300)
 
 
-# Create waterfall chart using ggwaterfall
-wf_plot <- waterfall(waterfall_data, 
-          rect_text_labels =waterfall_data$label2,
-          fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
-  # scale_x_discrete(labels = label_fun)+
-  labs(
-    title = "Breakdown of yearly CO2 Emissions from steel production in 2050",
-    x = "Scenario",
-    y = "Yearly emissions (Gt CO2/yr)",
-    fill = "Region"
-  ) +
-  theme_bw(base_size = 14)
+ }
+plot_cascade_cumuem(base_list)
+```
 
-plot_df <- plot_df %>%
-  filter(period == 2050) %>%
-  mutate(x_pos = ifelse(scenario == "NPi", 1, ifelse(scenario == "Extended lock-in", 14, 27))) #%>%
 
-wf_plot +
-  geom_bar(data = plot_df,
-          aes(x = x_pos, y = total_CO2_yearly, fill = region), 
-          width = 0.7,position="stack", stat="identity", alpha = 0.8, color = "black") +
-  scale_fill_manual(values =region_colors) +
-  scale_x_discrete(labels = labels_vec) +
-  theme(
-    panel.border = element_blank(),
-    panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
-    panel.grid.minor = element_blank(),
-    axis.ticks = element_blank())
-  #sub in basic grey bars instead
-  # geom_col(data = total_df %>% filter(scenario == "Extended lock-in"),
-  #          aes(x = 14, y = total),
-  #          fill = "grey", color = "black", width = 0.7) +
-  # geom_col(data = total_df %>% filter(scenario == "Fast transition"),
-  #          aes(x = 27, y = total),
-  #          fill = "grey", color = "black", width = 0.7)
+```{R cascade yearly emissions}
 
-# ggsave("figs_temp/cascade_yearly_emi_scen.png", width = 12, height = 8, dpi = 300)
+
+plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
+
+  #get region colors from list above
+  region_colors <- c(
+    "NPi" = "grey", "Extended lock-in" = "grey", "Fast transition" = "grey",
+    region_order,
+    setNames(region_order, paste0(names(region_order), "_2"))
+  )
+
+  mainscens_df_emi_notcumu <- miflist %>%
+    map_dfr(calc_em)
+
+  # Prepare data with total cumulative emissions and region contributions
+  plot_df <- mainscens_df_emi_notcumu %>%
+    filter(region != "World") %>%
+    select(period, scenario, region, total_CO2_yearly) %>%
+    filter(period == year_to_plot)
+
+  #group according to region groups
+  plot_df <- plot_df %>%
+    mutate(region = as.character(region)) %>%
+    mutate(region = ifelse(region %in% names(region_map), region_map[region], region)) %>%
+    group_by(region, scenario) %>%
+    summarise(total_CO2_yearly = sum(total_CO2_yearly), .groups = "drop") %>%
+    mutate(region = factor(region, levels = names(region_order)))
+
+
+  plot_df$region <- factor(plot_df$region, levels = names(region_order))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Extended lock-in", "Fast transition"))
+
+  # Get total emissions by scenario
+  total_df <- plot_df %>%
+    group_by(scenario) %>%
+    summarise(total = sum(total_CO2_yearly), .groups = "drop")
+
+  # Compute differences between scenarios by region for the cascade
+  cascade_df <- plot_df %>%
+    select(region, scenario, total_CO2_yearly) %>%
+    mutate(region = factor(region, levels = names(region_order))) %>%
+    arrange(region, scenario) %>%
+    group_by(region) %>%
+    mutate(diff = total_CO2_yearly - lag(total_CO2_yearly, default = first(total_CO2_yearly))) %>%
+    ungroup()
+
+  # Build waterfall data: baseline total, region contributions, final totals
+  waterfall_data <- bind_rows(
+    tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
+    cascade_df %>% filter(scenario == "Extended lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
+    tibble(label = "Extended lock-in", value = FALSE, type = "total"),
+    cascade_df %>% filter(scenario == "Fast transition") %>%
+      mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
+      select(label, value, type),
+    # tibble(label = "Fast transition", value = total_df$total[total_df$scenario == "Fast transition"], type = "total")
+    tibble(label = "Fast transition", value = 0, type = "total")
+  )
+
+  waterfall_data <- waterfall_data %>%
+    mutate(color = region_colors[label]) %>%
+    #remove useless "0" for the scenario totals
+    mutate(label2 = ifelse(type == "total", "", paste0(round(value, 0)))) %>%
+    select(label, value, type, label2, color) %>%
+    mutate(label = factor(label, levels = names(region_colors)))
+
+  # custom x ticks
+  labels_vec <- as.character(waterfall_data$label)
+  labels_vec <- ifelse(labels_vec %in% c("NPi", "Extended lock-in", "Fast transition"), labels_vec, " ")
+
+
+  # Create waterfall chart using ggwaterfall
+  wf_plot <- waterfall(waterfall_data, 
+            rect_text_labels =waterfall_data$label2,
+            fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
+    # scale_x_discrete(labels = label_fun)+
+    labs(
+      title = paste0("Breakdown of yearly CO2 Emissions from steel production in ", year_to_plot),
+      x = "Scenario",
+      y = "Yearly emissions (Mt CO2/yr)",
+      fill = "Region"
+    ) +
+    theme_bw(base_size = 14)
+
+  plot_df <- plot_df %>%
+    # filter(period == 2050) %>%
+    mutate(x_pos = ifelse(scenario == "NPi", 1, ifelse(scenario == "Extended lock-in", 8, 15))) #%>%
+
+  wf_plot <- wf_plot +
+    geom_bar(data = plot_df,
+            aes(x = x_pos, y = total_CO2_yearly, fill = region), 
+            width = 0.7,position="stack", stat="identity", alpha = 0.8, color = "black") +
+    scale_fill_manual(values =region_colors) +
+    scale_x_discrete(labels = labels_vec) +
+    theme(
+      panel.border = element_blank(),
+      panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank())
+  print(wf_plot)
+  ggsave(paste0("figs_temp/cascade_yearly_emi_",year_to_plot,"_scen.png"), width = 12, height = 8, dpi = 300)
+}
+
+plot_cascade_yearlyem(base_list, year_to_plot= 2050)
 ```

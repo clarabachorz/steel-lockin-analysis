@@ -53,12 +53,12 @@ calc_biofrac <- function(gdx) {
 
 ```{R, load gdx}
 
-fasttrans <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions-PkBudg820.gdx"
-lockin <- "inputdata/gdx/PolicyExtended-PkBudg820.gdx"
-npi <- "inputdata/gdx/PolicyExtended-NPi.gdx"
+fasttrans <- "inputdata/gdx/FastTransition-PkBudg820.gdx"
+lockin <- "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx"
+npi <- "inputdata/gdx/TransitionwLockIn-NPi.gdx"
 
-fasttrans_lowbio <- "inputdata/gdx/GreenPolicy_noReliningForSomeRegions_lowBio-PkBudg820.gdx"
-lockin_lowbio <- "inputdata/gdx/PolicyExtended_lowBio-PkBudg820.gdx"
+# fasttrans_lowbio <- "inputdata/gdx/FastTransition_lowBio-PkBudg820.gdx"
+# lockin_lowbio <- "inputdata/gdx/TransitionwLockIn_lowBio-PkBudg820.gdx"
 
 # fasttrans_lowbio <- 
 # lockin_lowbio <-
