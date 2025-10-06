@@ -1,11 +1,3 @@
-```{r setup, include = FALSE}
-path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/Analysis/"
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(
-    root.dir = path
-    )
-
-
 library(ggplot2)
 library(gdx)
 require(dplyr)
@@ -16,10 +8,45 @@ library(lusweave)
 library(ggsci)
 library(pals)
 library(stringr)
-```
 
 
-```{R other helper functions}
+# set up basic lists for plotting
+component_order <- c("Fossil gas and biogas\n(excluding hydrogen)",
+                    "Coal and biomass solids", 
+                    "Electricity CAPEX (other)",
+                    "Electricity CAPEX (for electrolysis)",
+                    "Electrolysis CAPEX",
+                    "Steel CAPEX (eaf secondary)",
+                    "Steel CAPEX (dri-ccs)",
+                    "Steel CAPEX (dri-eaf)",
+                    "Steel CAPEX (bf-ccs)",
+                    "Steel CAPEX (bf-bof)")
+
+region_names  <- tribble(
+  ~region, ~region_name,
+  'EUR',   'EU',
+  'CHA',   'China',
+  'USA',   'USA',
+  'IND',   'India',
+  'Global', 'Global'
+)
+
+scen_order <- c( "NPi", "Transition with lock-in", "Fast transition")
+
+component_colors <- c(
+  "Electricity CAPEX (other)" = "#fad231",
+  "Electricity CAPEX (for electrolysis)" = "#da9e06",
+  "Electrolysis CAPEX" = "#4fecdc",
+  "Steel CAPEX (eaf secondary)" = "#1edf3e",
+  "Steel CAPEX (dri-eaf)" = "#33eea3",
+  "Steel CAPEX (dri-ccs)" = "#7ea151",
+  "Steel CAPEX (bf-bof)" = "#323232",
+  "Steel CAPEX (bf-ccs)" = "#747373",
+  "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
+  "Coal and biomass solids" = "#7b3e0253"
+)
+
+#### HELPER FUNCTIONS
 
 # Use the reference REMIND delta cap df and compare the total capacity additions
 # (per tech) to the df calculated in the code
@@ -148,9 +175,6 @@ calculate_required_deltacap <- function(df.dem, df.capfac) {
     select(region, period, deltacap)
   return(df.deltacap)
 }
-```
-
-```{R calc investments}
 
 
 #### Conditions to using this function:
@@ -468,10 +492,6 @@ calc_total_investments <- function(gdx) {
 }
 
 
-```
-
-
-```{R calc cumu investment costs}
 calc_cumu_investment_costs <- function(df, discount = 0.05){
   # annualize the costs
   df_discounted <- df %>%
@@ -497,11 +517,20 @@ calc_cumu_investment_costs <- function(df, discount = 0.05){
     ungroup()
 }
 
-```
+combine_investment_costs <- function(scenarios) {
+  # scenarios: list of scenario objects, each with $gdx and $name
+  # calc_fun: function to calculate investments, e.g. calc_total_investments
+  dfs <- lapply(scenarios, function(scen) {
+    calc_total_investments(scen$gdx) %>% mutate(scenario = scen$name)
+  })
+  df.totalcosts <- bind_rows(dfs) %>%
+    filter(period >= 2030, period <= 2045) %>%
+    mutate(period = as.numeric(period)) %>%
+    mutate(value = value * 1000) #convert to billion USD
+}
 
-```{R plot costs}
 
-plot_invst_costs <- function(df.totalcosts, scen_order, component_order, component_colors, region_to_plot = "India", save_plot = FALSE){
+plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot = FALSE){
   if(region_to_plot == "Global"){
     df.totalcosts <- df.totalcosts %>%
       mutate(value = ifelse(is.na(value), 0, value)) %>%
@@ -520,12 +549,21 @@ plot_invst_costs <- function(df.totalcosts, scen_order, component_order, compone
       component = factor(component, levels = component_order[component_order %in% unique(component)]), 
       scenario = factor(scenario, levels = scen_order)
     )
-  print(plot_df)
+  # print(plot_df)
   # get the components in the df
   present_components <- levels(plot_df$component)
 
   # subset the colors vector
   present_colors <- component_colors[present_components]
+
+  # get average investments required
+  avg_investments <- plot_df %>%
+    group_by(period, scenario) %>%
+    summarise(value = sum(value, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(scenario) %>%
+    summarise(mean = mean(value, na.rm = TRUE)) %>%
+    ungroup()
 
   # plot
   region_plot <- ggplot() +
@@ -536,6 +574,12 @@ plot_invst_costs <- function(df.totalcosts, scen_order, component_order, compone
             width=3) +
     scale_fill_manual(values = present_colors) +
     facet_wrap(~ scenario, nrow = 3) +
+    # add dashed line for average
+    geom_hline(data = avg_investments, aes(yintercept = mean), linetype="dashed", color = "black") +
+    # add label
+    geom_text(data = avg_investments, aes(x = 2037, y = mean + 5,
+                                          label = paste0("Nominal average investments:\n", round(mean,1), " Bill. USD/yr")),
+                                          color = "black", size = 4, inherit.aes = FALSE) +
     labs(
       title = paste0("Steel sector investment costs (",
                     region_names$region_name[region_names$region == region_to_plot]
@@ -544,25 +588,22 @@ plot_invst_costs <- function(df.totalcosts, scen_order, component_order, compone
       y = "Investment costs\n(Bill. USD) per year",
       fill = "Component"
     ) +
-    guides(fill=guide_legend(nrow=3)) +
+    guides(fill=guide_legend(ncol=2)) +
     theme_bw(base_size = 14) +
     theme(
       panel.grid.minor = element_blank(),
       strip.text = element_text(face = "bold"),
       legend.position = "bottom"
     ) 
-  print(region_plot)
+  # print(region_plot)
 
   if(save_plot){
     ggsave(paste0("figs/investment_costs_", region_to_plot, ".png"), plot = region_plot, width = 8, height = 11, dpi = 300)
   }
 }
-```
-
-```{R plot costs CUMU}
 
 
-plot_avg_invst_capex <- function(df.totalcosts, final_year, scen_order, component_order, component_colors, discount_rate, region_to_plot = "IND", save_plot = FALSE){
+plot_avg_invst_capex <- function(df.totalcosts, final_year,  discount_rate, region_to_plot = "IND", save_plot = FALSE){
 
   plot_df <- df.totalcosts %>%
     filter(region == region_to_plot)
@@ -614,18 +655,15 @@ plot_avg_invst_capex <- function(df.totalcosts, final_year, scen_order, componen
       strip.text = element_text(face = "bold"),
       legend.position = "bottom"
     ) 
-  print(region_plot)
+  # print(region_plot)
 
   if(save_plot){
     ggsave(paste0("figs/investment_costs_avg_", region_to_plot, "_", final_year, ".png"), plot = region_plot, width = 12, height = 8, dpi = 300)
   }
 }
 
-```
 
-```{R plot costs CUMU (fossil only)}
-
-plot_avg_invst_fossil <- function(df.totalcosts, final_year, scen_order, component_order, component_colors, discount_rate, region_to_plot = "IND", save_plot = FALSE){
+plot_avg_invst_fossil <- function(df.totalcosts, final_year, discount_rate, region_to_plot = "IND", save_plot = FALSE){
   
   plot_df <- df.totalcosts %>%
     filter(region == region_to_plot)
@@ -681,81 +719,10 @@ plot_avg_invst_fossil <- function(df.totalcosts, final_year, scen_order, compone
       strip.text = element_text(face = "bold"),
       legend.position = "bottom"
     ) 
-  print(region_plot)
+  # print(region_plot)
 
   #save
   if(save_plot){
     ggsave(paste0("figs/investment_costs_fossil_avg_", region_to_plot,, "_", final_year, ".png"), plot = region_plot, width = 12, height = 8, dpi = 300)
   }
 }
-```
-
-```{R calculate investment costs}
-component_order <- c("Fossil gas and biogas\n(excluding hydrogen)",
-                    "Coal and biomass solids", 
-                    "Electricity CAPEX (other)",
-                    "Electricity CAPEX (for electrolysis)",
-                    "Electrolysis CAPEX",
-                    "Steel CAPEX (eaf secondary)",
-                    "Steel CAPEX (dri-ccs)",
-                    "Steel CAPEX (dri-eaf)",
-                    "Steel CAPEX (bf-ccs)",
-                    "Steel CAPEX (bf-bof)")
-
-region_names  <- tribble(
-  ~region, ~region_name,
-  'EUR',   'EU',
-  'CHA',   'China',
-  'USA',   'USA',
-  'IND',   'India',
-  'Global', 'Global',
-)
-
-scen_order <- c( "NPi", "Transition with lock-in", "Fast Transition")
-
-component_colors <- c(
-  "Electricity CAPEX (other)" = "#fad231",
-  "Electricity CAPEX (for electrolysis)" = "#da9e06",
-  "Electrolysis CAPEX" = "#4fecdc",
-  "Steel CAPEX (eaf secondary)" = "#1edf3e",
-  "Steel CAPEX (dri-eaf)" = "#33eea3",
-  "Steel CAPEX (dri-ccs)" = "#7ea151",
-  "Steel CAPEX (bf-bof)" = "#323232",
-  "Steel CAPEX (bf-ccs)" = "#747373",
-  "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
-  "Coal and biomass solids" = "#7b3e0253"
-)
-
-
-greenpol <- "inputdata/gdx/FastTransition-PkBudg820.gdx"
-base <- "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx"
-npi <- "inputdata/gdx/TransitionwLockIn-NPi.gdx"
-```
-
-```{R run calculations}
-# #calculate costs
-df.totalcosts1 <- calc_total_investments(greenpol) %>%
-  mutate(scenario = "Fast Transition")
-
-df.totalcosts2 <- calc_total_investments(base) %>%
-  mutate(scenario = "Transition with lock-in")
-
-df.totalcosts3 <- calc_total_investments(npi) %>%
-  mutate(scenario = "NPi")
-
-df.totalcosts <- df.totalcosts1 %>%
-  bind_rows(df.totalcosts2) %>%
-  bind_rows(df.totalcosts3) %>%
-  filter(period >= 2030, period <= 2045) %>%
-  mutate(period = as.numeric(period)) %>%
-  mutate(value = value * 1000) #convert to billion USD 
-
-# we cannot take an average up to 2070, as the calculation does not take into account
-# retirement and is only valid for the short term (up to 2045)
-final_year_avg_invst = 2040
-plot_invst_costs(df.totalcosts, scen_order, component_order, component_colors, region_to_plot = "IND")
-plot_invst_costs(df.totalcosts, scen_order, component_order, component_colors, region_to_plot = "Global")
-
-plot_avg_invst_capex(df.totalcosts, final_year_avg_invst, scen_order, component_order, component_colors, discount_rate = 0.05, region_to_plot = "IND", save_plot = FALSE)
-plot_avg_invst_fossil(df.totalcosts, final_year_avg_invst, scen_order, component_order, component_colors, discount_rate = 0.05, region_to_plot = "IND", save_plot = FALSE)
-```

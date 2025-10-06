@@ -1,36 +1,23 @@
- ---
-title: "BOF Steel-making Capacity Plot"
-output: html_document
----
-
-```{R setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
 library(tidyverse)
 library(ggplot2)
 library(grid)
 library(quitte)
 require(gridExtra)
 
-```
 
-```{R readdata}
-raw_data <- read.csv("inputdata/gem/global_BOFcap.csv")
+raw_data <- read.csv("./inputdata/gem/global_BOFcap.csv")
 
-raw_age_data <- read.csv("inputdata/gem/age_distribution.csv")
+raw_age_data <- read.csv("./inputdata/gem/age_distribution.csv")
 
-raw_age_data_region <- read.csv("inputdata/gem/age_distribution_regions.csv")
+raw_age_data_region <- read.csv("./inputdata/gem/age_distribution_regions.csv")
 
-raw_regional_data <- read.csv("inputdata/gem/BOF_capacity_perREMINDregion.csv")
+raw_regional_data <- read.csv("./inputdata/gem/BOF_capacity_perREMINDregion.csv")
 
-df_production_bof <- read.csv("inputdata/worldsteel/bof_production.csv")
-df_production_other <- read.csv("inputdata/worldsteel/other_production.csv")
-df_production_eaf <- read.csv("inputdata/worldsteel/eaf_production.csv")
+df_production_bof <- read.csv("./inputdata/worldsteel/bof_production.csv")
+df_production_other <- read.csv("./inputdata/worldsteel/other_production.csv")
+df_production_eaf <- read.csv("./inputdata/worldsteel/eaf_production.csv")
 
 
-```
-
-```{R clean data}
 clean_column_names <- function(name) {
   name <- gsub("\\.+", "_", name)
   name <- sub("_$", "", name)
@@ -116,9 +103,7 @@ fill_colors = c(
       "Other Asia and Latin America" = col_oas,
       "Middle East and North Africa" = col_mea
 )
-```
 
-```{R calc emissions}
 
 #### CALCULATE YEARLY AND CUMULATIVE EMISSIONS FROM CAPACITY DATA ####
 #### key assumptions: capacity factor of 0.8, emissions factor of 2.3 tCO2/t steel for old plants, 2 tCO2/t steel for new plants (BAT)
@@ -182,11 +167,8 @@ data_long_em_cumu$Category <- factor(data_long_em_cumu$Category,
                               "Cumu_oldBOF_1relining",
                               "Cumu_oldBOF"))
 
-#### PLOTTING ####
+#### PLOTTING FUNCTIONS ####
 
-```
-
-```{R plot}
 plot_BOF_capacity <- function(save_plot=FALSE){  
   data_long_filtered <- data_long %>%
     filter(index >= 2020 & index <2075) %>%
@@ -224,12 +206,8 @@ plot_BOF_capacity <- function(save_plot=FALSE){
     ggsave("figs/BOF_capacity_plot.png", width = 10, height = 6, dpi = 300)
   }
 }
-plot_BOF_capacity()
-```
 
-
-```{R plot emissions}
-plot_emissions_1and2relining <- function(save_plot=FALSE){  
+plot_emissions_1and2relining <- function(save_plot=FALSE){
   x_breaks <- seq(2020, 2085, by = 5)
 
   data_to_plot <- data_long_filtered_em
@@ -355,11 +333,8 @@ plot_emissions_1and2relining <- function(save_plot=FALSE){
     ggsave("figs/BOF_emissions_plot_1_and_2_relinings.png", width = 11, height = 8, dpi = 300)
   }
 }
-plot_emissions_1and2relining()
-```
 
-```{R plot emissions}
-plot_emissions_1relining <- function(save_plot=FALSE){  
+plot_emissions_1relining <- function(save_plot=FALSE){
   x_breaks <- seq(2020, 2075, by = 5)
 
   data_long_toplot <- data_long_filtered_em %>%
@@ -491,10 +466,6 @@ plot_emissions_1relining <- function(save_plot=FALSE){
     ggsave("figs/BOF_emissions_plot_1relining.png", width = 11, height = 8, dpi = 300)
   }
 }
-plot_emissions_1relining()
-```
-
-```{R plot regional production data}
 
 plot_regional_production <- function(save_plot=FALSE){
   regions_to_filter <- c("USA", "EUR", "CHA", "IND", "OAS", "SSA", "REF", "NEU", "JPN")
@@ -663,10 +634,7 @@ plot_regional_production <- function(save_plot=FALSE){
     ggsave("figs/BOF_regional_production_plot_wprojections.png", p, width = 8, height = 6, dpi = 300)
   }
 }
-plot_regional_production()
-```
 
-```{R calc regional capacity ADDITIONS data}
 
 plot_capacity_additions <- function(save_plot=FALSE){
   bins = 2
@@ -789,10 +757,7 @@ plot_capacity_additions <- function(save_plot=FALSE){
     ggsave("figs/BOF_regional_capacity_additions_plot.png", p, width = 8, height = 6, dpi = 300)
   }
 }
-plot_capacity_additions()
-```
 
-```{R plot age distribution, regions}
 
 plot_BFBOF_age_distribution <- function(save_plot=FALSE){
   #clean up age data df: missing ages are 0.
@@ -943,10 +908,7 @@ plot_BFBOF_age_distribution <- function(save_plot=FALSE){
     ggsave("figs/BOF_age_distribution_plot_wregions.png", width = 10, height = 6, dpi = 300)
   }
 }
-plot_BFBOF_age_distribution()
-```
 
-```{R calc regional capacity data}
 
 plot_cumulative_capacity_additions <- function(save_plot=FALSE){
   start_year = 1900
@@ -1070,5 +1032,3 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
     ggsave("figs/BOF_regional_cumulative_capacity_plot.png", p, width = 8, height = 6, dpi = 300)
   }
 }
-plot_cumulative_capacity_additions()
-```
