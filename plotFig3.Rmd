@@ -16,6 +16,7 @@ require(ggplot2)
 library(gridExtra)
 library(grid)
 library(purrr)
+library(ggpubr)
 
 library(quitte)
 library(mip)
@@ -62,9 +63,9 @@ write_images <- function (fig, name, height, width = mm(180), formats = c('png',
 Loading the relevant scenario data from MIF files.
 
 ```{r}
-mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy-NPi.mif")
-mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_GreenPolicy_noReliningForSomeRegions-PkBudg820.mif")
-mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_PolicyExtended-PkBudg820.mif")
+mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif")
+mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif")
+mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif")
 ```
 
 ## Combine and reduce to relevant variables
@@ -132,6 +133,10 @@ df_plot <- (
     mutate(variable = sub("Production|Industry|Steel|+|", "", variable, fixed = TRUE)) %>%
     filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070))
 )
+
+# Sort variable by custom order.
+df_plot$variable <- factor(df_plot$variable, levels = c('SCRAP-EAF', 'DRI-H2-EAF', 'DRI-NG-EAF-CCS', 'DRI-NG-EAF', 'BF-BOF-CCS', 'BF-BOF'))
+
 show_sample(df_plot)
 ```
 
@@ -141,41 +146,87 @@ show_sample(df_plot)
 We create Figure 3 by combining one stacked-bar plot for the World with a facet of stacked-bar plots for the other regions in a grid.
 
 ```{r}
-# Single panel for World.
-subfig_world <- ggplot(df_plot %>% filter(region == "World"), aes(x = period, y = value, fill = variable)) +
-  geom_bar(stat = "identity") +
-  facet_wrap(~ region) +
-  labs(title = "Fig. 3: Annual steel production", x = NULL, y = "Annual steel production (Mt/yr)") +
-  theme_minimal() + 
-  theme(
-    legend.position = "none",
-    plot.title = element_text(size = 7, face = "bold"),
-    axis.text.x = element_text(size = 5),
-    axis.title.y = element_text(size = 6),
-    axis.text.y = element_text(size = 5),
-    strip.text.x = element_text(size = 6),
-  ) +
-  scale_fill_manual(values = plotstyle(unique(df_plot$variable)))
+df_plot_grouped <- split(df_plot, df_plot$scenario)
+subfigs_world <- list()
+subfigs_regions <- list()
 
-# Multiple panels through facet_wrap for all other regions.
-subfig_other <- ggplot(df_plot %>% filter(region != "World"), aes(x = period, y = value, fill = variable)) +
-  geom_bar(stat = "identity") +
-  facet_wrap(~ region, scales = "free_x", ncol = 2, strip.position = "top") +
-  labs(title = NULL, x = NULL, y = NULL, fill = "Routes") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 5),
-    axis.text.y = element_text(size = 5),
-    strip.text.x = element_text(size = 6),
-    legend.title = element_text(size = 7),
-    legend.text = element_text(size = 6),
-  ) +
-  scale_fill_manual(values = plotstyle(unique(df_plot$variable)))
+bar_spacing <- 0.5
+bar_width_single <- 5 - bar_spacing
+bar_width_double <- 10 - bar_spacing
 
-# Combine the two into a single figure through grid.arrange.
-fig <- grid.arrange(subfig_world, subfig_other, ncol = 2, widths = c(1, 2))
+scen_names <- list(
+    "TransitionwLockIn-PkBudg820" = "Extended lock-in",
+    "FastTransition-PkBudg820" = "Fast transition"
+)
+
+for (scen in names(df_plot_grouped)) {
+  print(scen)
+  df_rows <- df_plot_grouped[[scen]]
+  df_rows$period[df_rows$period == 2070] <- 2067.5
+
+  # Single panel for World.
+  df_rows_world <- df_rows %>% filter(region == "World")
+  subfigs_world[[scen]] <- ggplot(df_rows_world, aes(x = period, y = value, fill = variable)) +
+    geom_col(width = ifelse(df_rows_world$period == 2067.5, bar_width_double, bar_width_single)) +
+    facet_wrap(~ region) +
+    labs(title = scen_names[[scen]], x = NULL, y = "Annual steel production (Mt/yr)") +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 7, face = "bold"),
+      axis.text.x = element_text(size = 5),
+      axis.title.y = element_text(size = 6),
+      axis.text.y = element_text(size = 5),
+      strip.text.x = element_text(size = 6),
+    ) +
+    scale_fill_manual(
+        values = plotstyle(as.character(levels(df_rows$variable))),
+        name = NULL,
+        labels = c(
+            "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+            "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage (DRI-NG-EAF-CCS)",
+            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+            "Primary steel using a blast furnace and a\nbasic oxygen furnace with carbon capture\nand storage (BF-BOF-CCS)",
+            "Primary steel using a blast furnace and a\nbasic oxygen furnace (BF-BOF)"
+        ),
+    ) +
+    guides(fill = guide_legend(nrow = 3, ncol = 2))
+
+  # Multiple panels through facet_wrap for all other regions.
+  df_rows_regions <- df_rows %>% filter(region != "World")
+  subfigs_regions[[scen]] <- ggplot(df_rows_regions, aes(x = period, y = value, fill = variable)) +
+    geom_col(width = ifelse(df_rows_regions$period == 2067.5, bar_width_double, bar_width_single)) +
+    facet_wrap(~ region, scales = "free_x", ncol = 2, strip.position = "top") +
+    labs(title = NULL, x = NULL, y = NULL, fill = "Routes") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(size = 5),
+      axis.text.y = element_text(size = 5),
+      strip.text.x = element_text(size = 6),
+      legend.title = element_text(size = 7),
+      legend.text = element_text(size = 6),
+      legend.position = "bottom",
+    ) +
+    scale_fill_manual(
+        values = plotstyle(as.character(levels(df_rows$variable))),
+        name = NULL,
+    )
+  }
+
+
+fig <- ggarrange(
+    subfigs_world[["TransitionwLockIn-PkBudg820"]],
+    subfigs_regions[["TransitionwLockIn-PkBudg820"]],
+    subfigs_world[["FastTransition-PkBudg820"]],
+    subfigs_regions[["FastTransition-PkBudg820"]],
+    ncol=2,
+    nrow=2,
+    common.legend = TRUE,
+    legend="bottom"
+)
 
 # Export figure to file(s).
-write_images(fig, "Fig3", height = mm(80))
+write_images(fig, "Fig3", height = mm(180))
 show(fig)
 ```
