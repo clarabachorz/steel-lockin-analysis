@@ -10,6 +10,7 @@ library(zoo)
 library(purrr)
 library(openxlsx)
 library(rlang)
+library(ggpattern)
 
 
 # --- Helper functions for scenario abatement cost analysis ---
@@ -193,11 +194,27 @@ add_demand_adjustment <- function(scenario2_costs, demand_value) {
 }
 
 
-
+#' Get corresponding decade from the year
+#'
+#' This function computes the corresponding decade to a certain year
+#' @param year Year (e.g., 2025)
+#' @return Decade as string (e.g., "2020s")
 get_decade <- function(year) {
   paste0(floor(year / 10) * 10, "s")
 }
 
+#' Calculate cumulated discounted sum of a certain column (eg cost or emission)
+#' over a certain time period
+#' @param lockin_mif_em Data frame with costs or emissions
+#' @param start_date Start year (e.g., 2025) for the discounting, and for the cumulative sum if it is taken
+#' @param end_date End year (e.g., 2075) for the discounting, and for the cumulative sum if it is taken
+#' @param discount_rate Discount rate (e.g., 0.05 for 5%)
+#' @param col_to_sum Column name to sum over (e.g., "total_cost" or "total_CO2_yearly")
+#' @param final_col_name Name of the final column with the cumulated discounted sum (e.g., "cost1" or "em1")
+#' @param by_decade Logical, whether to return the cumulated sum by decade (TRUE) or not (FALSE)
+#' @param not_cumu Logical, whether to return the df before the cumulative sum is taken (TRUE) or return the final cumulated sum (FALSE)
+#' @return Data frame with a new column: either discounted (not_cumu) or cumulative discounted over
+#' the whole period (by_decade = FALSE) or by decade (by_decade = TRUE)
 calc_cumulated_discounted_sum <- function(lockin_mif_em, start_date, end_date, discount_rate, col_to_sum, final_col_name, by_decade = FALSE, not_cumu = FALSE) {
     lockin_mif_em <- lockin_mif_em %>%
         group_by(region) %>%
@@ -232,6 +249,15 @@ calc_cumulated_discounted_sum <- function(lockin_mif_em, start_date, end_date, d
 }
 
 # --- Main analysis and plotting function ---
+#' Run the abatement analysis to extract abatement costs between two scenarios
+#' and plot the results
+#' @param scen1 List with name, mif_file, lcop_file for the 1st scenario (e.g., lock-in)
+#' @param scen2 List with name, mif_file, lcop_file for the 2nd scenario (e.g., fast transition)
+#' @param region_to_aggr List with regions to aggregate, e.g., list("Global North" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ"), "CHA" = c("CHA"), ...)
+#' @param start_date Start year (e.g., 2025) for the discounting, and for the cumulative sum if it is taken
+#' @param end_date End year (e.g., 2075) for the discounting, and for the cumulative sum if it is taken
+#' @param discount_rate Discount rate (e.g., 0.05 for 5%)
+#' @return List with fscp_df_grouped (data frame with abatement costs by region) and plot (ggplot object)
 run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end_date, discount_rate) {
     
     # Plot order
@@ -358,7 +384,16 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
 }
 
 
-# --- Main analysis and plotting function ---
+#' Run the abatement cost and CO2 price comparison analysis to extract
+#' the cost difference between two scenarios and the value of avoided CO2 emissions
+#' and plot the results
+#' @param scen1 List with name, mif_file, lcop_file for the 1st scenario (e.g., lock-in)
+#' @param scen2 List with name, mif_file, lcop_file for the 2nd scenario (e.g., fast transition)
+#' @param region_to_aggr List with regions to aggregate, e.g., list("Global North" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ"), "CHA" = c("CHA"), ...)
+#' @param start_date Start year (e.g., 2025) for the discounting, and for the cumulative sum if it is taken
+#' @param end_date End year (e.g., 2075) for the discounting, and for the cumulative sum if it is taken
+#' @param discount_rate Discount rate (e.g., 0.05 for 5%)
+#' @return List with total_df_grouped (data frame with cost difference and value of avoided emissions by region) and plot (ggplot object)
 run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, start_date, end_date, discount_rate) {
     
     # Plot order
@@ -400,9 +435,11 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
     demand_value <- calc_demand_adjustment(mif1, mif2, mif2_prod, mif1_prod)
     costs2_adj <- add_demand_adjustment(costs2, demand_value)
 
-    #calculate co2 price in the least ambitious scenario (scen 1)
+    # calculate co2 price in the least ambitious scenario (scen 1)
     # and multiply by emission difference to get the value of the avoided
     # co2 emissions. MtCO2/yr * USD/tCO2 = million USD/yr
+    # (this corresponds to the cost of abating those additional emissions in scenario 1,
+    # if they have not been avoided, they are abated at the marginal cost = co2 price of scenario 1)
     mif1_co2price <- get_co2_price(mif1)
     em_diff <- calc_em_difference(mif1_em, mif2_em)
     value_co2_avoided <- mif1_co2price %>%
@@ -411,6 +448,9 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
         select(period, region, value_em)
 
     # get cost difference between the two scenarios
+    # including the steel demand adjustment
+    # this includes CAPEX (investment costs in new steel plants)
+    # and OPEX for the steel sector (coal, hydrogen, gas, iron ore, electricity, scrap etc.)
     cost_diff <- calc_cost_diff(costs1, costs2_adj)
 
 
@@ -461,20 +501,51 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
 
     # Plotting
     plot_abatement_cost <- function(df, discount_rate, start_date, end_date, scen1_name, scen2_name) {
-        ggplot(df, aes(x=region_display, y= value, fill = type)) +
-            geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
+        ggplot(df, aes(x=region_display, y= value, fill = region_display, pattern = type)) +
+            geom_bar_pattern(
+                stat = "identity",
+                position = position_dodge(width = 0.7),
+                width = 0.6,
+                # color = "#bdb9b9",
+                color = "#212020",
+                pattern_fill = "#212020",
+                pattern_color = "#212020",
+                pattern_angle = 45,
+                pattern_density = 0.25,
+                pattern_spacing = 0.08,
+                pattern_key_scale_factor = 0.5
+                ) +
             labs(
-                title = paste("The value of abating additional CO2 in\n", scen2_name, "compared to", scen1_name,  ":\nscenario cost difference vs. value of avoided CO2,", "\n(discount rate:", discount_rate * 100, "%, dates:", start_date, "-", end_date, ")"),
+                title = paste0("The value of abating additional CO2 in ", scen2_name, " compared to\n", scen1_name,  ": additional abatement cost vs. value of avoided CO2\n(discount rate: ", discount_rate * 100, "%, dates: ", start_date, "-", end_date, ")"),
                 x = "Region",
-                y = "Value (bill. USD)"
+                y = "Value (bill. USD)",
+                pattern = "Cost type"
             ) +
-            # theme_minimal() +
+            theme_bw(base_size = 25) +
+            scale_pattern_manual(
+                values = c("cost_diff" = "none", "value_em" = "stripe"),
+                labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"),
+            ) +
             scale_fill_manual(values = c(
-                "cost_diff" = "#4870b9",
-                "value_em" = "#33a02c"
-            ), labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"
-            )) +
-            theme(axis.text.x = element_text(angle = 30, hjust = 1))
+                "China" = "#e41c23",
+                "India" = "#ff7f00",
+                "Global North" = "#110a9a"),
+                guide = "none") +
+            # scale_fill_manual(values = c(
+            #     "cost_diff" = "#4888b9",
+            #     "value_em" = "#33a02c"
+            # ), labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"
+            # )) +
+            theme(
+                axis.text.x = element_text(hjust = 0.5),
+                panel.border = element_blank(),
+                panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
+                panel.grid.minor = element_blank(),
+                axis.ticks = element_blank(),
+                legend.position = "right",
+                legend.title.position = "top",
+                legend.title = element_text(hjust = 0.5)
+                )
     }
 
     list(
@@ -483,6 +554,15 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
     )
 }
 
+#' Run the abatement analysis to extract abatement costs between two scenarios
+#' by decade and plot the results
+#' @param scen1 List with name, mif_file, lcop_file for the 1st scenario (e.g., lock-in)
+#' @param scen2 List with name, mif_file, lcop_file for the 2nd scenario (e.g., fast transition)
+#' @param region_to_aggr List with regions to aggregate, e.g., list("Global North" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ"), "CHA" = c("CHA"), ...)
+#' @param start_date Start year (e.g., 2025) for the discounting, and for the cumulative sum if it is taken
+#' @param end_date End year (e.g., 2075) for the discounting, and for the cumulative sum if it is taken
+#' @param discount_rate Discount rate (e.g., 0.05 for 5%)
+#' @return Data frame with fscp_df_grouped (data frame with abatement costs by region and decade)
 run_abatement_analysis_per_decade <- function(scen1, scen2, region_to_aggr, start_date, end_date, discount_rate) {
     # Read data
     lcop1 <- read.csv(scen1$lcop_file)

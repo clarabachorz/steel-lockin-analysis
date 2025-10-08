@@ -74,22 +74,47 @@ region_groups <- list(
   "EUR+NEU+USA+JPN+REF+CAZ" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ")
 )
 
+# old colors: not used for consistency with Fig 1, but probably look better
 region_order = c(
-  "CHA" = "#e41818",
-  "IND"="#e48108",
-  "OAS"="#c9b60d",
-  "OASLAM" = "#c9b60d",
-  "SSA"="#0dc90d",
+  "CHA" = "#e41c23",
+  "IND"="#ff7f00",
+  "OAS"="#eea810",
+  "OASLAM" = "#eea810",
+  "SSA"="#06723e",
   "REF"="#aac90d",
   "LAM"="#c90dbc",
   "JPN"="#d4c7b1",
-  "MEA"="#8340c2",
+  "MEA"="#0ada5a",
   "USA"="#08a0e4",
   "EUR"="#0912c3",
-  "EUR+NEU+USA+JPN+REF+CAZ" = "#0912c3",
+  "EUR+NEU+USA+JPN+REF+CAZ" = "#110a9a",
   "NEU"="#c9b60d",
   "CAZ"="#08e4a0")
 
+region_labels <- c(
+  "CHA" = "China",
+  "SSA" = "Sub-saharan Africa",
+  "IND" = "India",
+  "EUR+NEU+USA+JPN+REF+CAZ" = "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries",
+  "OASLAM" = "Other Asia and Latin America",
+  "MEA" = "Middle East and North Africa"
+)
+
+col_useur <- "#110a9a"
+col_cha <- "#e41c23"
+col_ind <- "#ff7f00"
+col_ssa <- "#06723e"
+col_oas <- "#eea810"
+col_mea <- "#0ada5a"
+
+fill_colors = c(
+      "China" = col_cha,
+      "Sub-saharan Africa" = col_ssa,
+      "India" = col_ind,
+      "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries" = col_useur,
+      "Other Asia and Latin America" = col_oas,
+      "Middle East and North Africa" = col_mea
+)
 
 plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
   end_year <- 2070
@@ -198,7 +223,9 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
   waterfall_data <- waterfall_data %>%
     mutate(color = region_colors[label]) %>%
     #remove useless "0" for the scenario totals
-    mutate(label2 = ifelse(type == "total", "", paste0(round(value, 1)))) %>%
+    mutate(label2 = ifelse(type == "total", "", paste0(round(value, 0)))) %>%
+    # remove 0s
+    mutate(label2 = ifelse(label2 == "0", "", label2)) %>%
     #remove "_2" with hacky extra space:
     # mutate(label = gsub("_2", " ", label)) %>%
     select(label, value, type, label2, color) %>%
@@ -210,47 +237,81 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
   # Create waterfall chart using ggwaterfall
   wf_plot <- waterfall(waterfall_data, 
-            rect_text_labels =waterfall_data$label2,
+            rect_text_labels = waterfall_data$label2,
+            rect_text_size = 2.5,
+            put_rect_text_outside_when_value_below = 20,
             fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
     # scale_x_discrete(labels = label_fun)+
     labs(
-      title = "Breakdown of cumulative CO2 Emissions from steel production in 2070 (2025 to 2070)",
+      title = "Breakdown of cumulative CO2 Emissions from steel production in 2070\n(2025 to 2070)",
       x = "Scenario",
       y = "Cumulative emissions (Gt CO2)",
       fill = "Region"
     ) +
-    theme_bw(base_size = 14)
+    theme_bw(base_size = 25)
 
   plot_df <- plot_df %>%
     filter(period == end_year) %>%
     #need to specify xpos for the cumulative emissions bars (stacked)
-    mutate(x_pos = ifelse(scenario == "NPi", 1, 
-                          ifelse(scenario == "Transition with lock-in", 8, 15)))
+    mutate(
+      x_pos = ifelse(
+        scenario == "NPi",
+        1,
+        ifelse(scenario == "Transition with lock-in", 8, 15)))
 
+  # manually calculate the y positions for the aac annotations
+  df_aac <- df_aac %>%
+    left_join(plot_df %>% select(region, scenario, cumuCO2), 
+              by = c("region" = "region", "scenario1" = "scenario")) %>%
+    rename(cumuCO2_0 = cumuCO2) %>%
+    left_join(plot_df %>% select(region, scenario, cumuCO2), 
+              by = c("region" = "region", "scenario2" = "scenario")) %>%
+    rename(cumuCO2_1 = cumuCO2) %>%
+    mutate(diff_CO2 = cumuCO2_1 - cumuCO2_0) %>%
+    select(-cumuCO2_0, -cumuCO2_1) %>%
+    arrange(x_pos) %>%
+    mutate(diffCO2_previous = lag(diff_CO2, default = 0)) %>%
+    mutate(diffCO2_cumu = cumsum(diffCO2_previous)) %>%
+    mutate(y_pos = 120 + diffCO2_cumu) %>%
+    select(-diffCO2_previous, -diffCO2_cumu)
+
+
+  plot_df <- plot_df %>%
+    mutate(region = recode(region, !!!region_labels))
+
+  # complete the plot with the stacked bars and the aac annotations
   wf_plot <- wf_plot +
     geom_bar(data = plot_df,
-            aes(x = x_pos, y = cumuCO2, fill = region), 
-            width = 0.7,position="stack", stat="identity", alpha = 0.8, color = "black") +
-    scale_fill_manual(values =region_colors) +
+            aes(x = x_pos, y = cumuCO2, fill = region),
+            width = 0.7,position="stack", stat="identity", alpha = 1, color = "black") +
+    scale_fill_manual(
+      values =fill_colors,
+      breaks = names(fill_colors)) +
     scale_x_discrete(labels = labels_vec) +
     theme(
       panel.border = element_blank(),
       panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.minor = element_blank(),
       axis.ticks = element_blank(),
-      legend.position = "bottom")
+      legend.position = "right",
+      legend.title.position = "top",
+      legend.title = element_text(hjust = 0.5),
+      legend.key.width = unit(1, "cm"),
+      legend.key.height = unit(1, "cm"))
 
   if(show_aac_annotations){
     wf_plot <- wf_plot +
     # add the average abatement cost labels
     geom_text(
         data = df_aac,
-        aes(x = x_pos, y = 100, label = paste0("$", round(fscp, 1), "\n/tCO2")),
-        color = "black", size = 3, fontface = "bold", inherit.aes = FALSE
+        aes(x = x_pos, y = y_pos, label = paste0("$", round(fscp, 0), "\n/tCO2")),
+        color = "black", size = 5, fontface = "bold", inherit.aes = FALSE
     )
   }
 
   ggsave("figs/cascade_cumu_emi_scen.png", wf_plot, width = 12, height = 8, dpi = 300)
+  
+  return(wf_plot)
 
 
  }
