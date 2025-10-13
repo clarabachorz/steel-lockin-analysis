@@ -8,19 +8,19 @@ library(lusweave)
 library(ggsci)
 library(pals)
 library(stringr)
-
+library(ggpubr)
 
 # set up basic lists for plotting
 component_order <- c("Fossil gas and biogas\n(excluding hydrogen)",
-                    "Coal and biomass solids", 
-                    "Electricity CAPEX (other)",
-                    "Electricity CAPEX (for electrolysis)",
-                    "Electrolysis CAPEX",
-                    "Steel CAPEX (eaf secondary)",
-                    "Steel CAPEX (dri-ccs)",
-                    "Steel CAPEX (dri-eaf)",
-                    "Steel CAPEX (bf-ccs)",
-                    "Steel CAPEX (bf-bof)")
+                    "Coal and biomass solids",
+                    "Solar PV\n(for electrolysis)",
+                    "Electrolysis",
+                    "Solar PV (other steel-\nrelated demand)",
+                    "EAF (secondary)",
+                    "DRI CCS retrofit",
+                    "DRI-EAF",
+                    "BF CCS retrofit",
+                    "BF-BOF")
 
 region_names  <- tribble(
   ~region, ~region_name,
@@ -31,17 +31,30 @@ region_names  <- tribble(
   'Global', 'Global'
 )
 
-scen_order <- c( "NPi", "Transition with lock-in", "Fast transition")
+scen_order <- c( "Current policies", "Transition with lock-in", "Fast transition")
+
+# component_colors <- c(
+#   "Solar PV (other steel-\nrelated demand)" = "#fad231",
+#   "Solar PV\n(for electrolysis)" = "#da9e06",
+#   "Electrolysis" = "#0f5e0f",
+#   "EAF (secondary)" = "#1edf3e",
+#   "DRI-EAF" = "#0aacdd",
+#   "DRI CCS retrofit" = "#7ea151",
+#   "BF-BOF" = "#323232",
+#   "BF CCS retrofit" = "#747373",
+#   "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
+#   "Coal and biomass solids" = "#7b3e0253"
+# )
 
 component_colors <- c(
-  "Electricity CAPEX (other)" = "#fad231",
-  "Electricity CAPEX (for electrolysis)" = "#da9e06",
-  "Electrolysis CAPEX" = "#4fecdc",
-  "Steel CAPEX (eaf secondary)" = "#1edf3e",
-  "Steel CAPEX (dri-eaf)" = "#33eea3",
-  "Steel CAPEX (dri-ccs)" = "#7ea151",
-  "Steel CAPEX (bf-bof)" = "#323232",
-  "Steel CAPEX (bf-ccs)" = "#747373",
+  "Solar PV (other steel-\nrelated demand)" = "#ee8866",
+  "Solar PV\n(for electrolysis)" = "#eedd88",
+  "Electrolysis" = "#ffaabb",
+  "EAF (secondary)" = "#44bb99",
+  "DRI-EAF" = "#99ddff",
+  "DRI CCS retrofit" = "#77aadd",
+  "BF-BOF" = "#323232",
+  "BF CCS retrofit" = "#747373",
   "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
   "Coal and biomass solids" = "#7b3e0253"
 )
@@ -287,12 +300,12 @@ calc_total_investments <- function(gdx) {
   df.Inv_steel_all <- df.deltacap_all %>%
     # mutate(component = paste0("Steel CAPEX (", all_te, "-", opmoPrc, ")") ) %>%
     mutate(component = case_when(
-      all_te == "eaf" & opmoPrc == "sec" ~ "Steel CAPEX (eaf secondary)",
-      all_te == "eaf" & opmoPrc == "PRI" ~ "Steel CAPEX (dri-eaf)",
-      all_te == "idr" ~ "Steel CAPEX (dri-eaf)",
-      all_te == "bfcc" ~ "Steel CAPEX (bf-ccs)",
-      all_te == "idrcc" ~ "Steel CAPEX (dri-ccs)",
-      all_te == "bf" | all_te == "bof" ~ "Steel CAPEX (bf-bof)",
+      all_te == "eaf" & opmoPrc == "sec" ~ "EAF (secondary)",
+      all_te == "eaf" & opmoPrc == "PRI" ~ "DRI-EAF",
+      all_te == "idr" ~ "DRI-EAF",
+      all_te == "bfcc" ~ "BF CCS retrofit",
+      all_te == "idrcc" ~ "DRI CCS retrofit",
+      all_te == "bf" | all_te == "bof" ~ "BF-BOF",
       TRUE ~ NA_character_
     )) %>%
     left_join(df.CAPEX_steel, by = c("region","period", "all_te")) %>%
@@ -343,14 +356,14 @@ calc_total_investments <- function(gdx) {
   # Since we focus on the short term (within the lifetime of electrolysers) this effect should be small.
   df.deltacap_elh2_h2 <- calculate_required_deltacap(df.FeDemH2, df.elh2capfac) %>%
     mutate(all_te = "elh2",
-          component = "Electrolysis CAPEX")
+          component = "Electrolysis")
 
   # PART 2: ELECTRICITY CAPEX FOR ELECTROLYSIS
   # merge dfs and calculate spv (capacity) required for electrolysis
   # then, calculate the required capacity additions
   df.deltacap_elh2_el <- calculate_required_deltacap(df.elDem_elh2, df.capfac_el) %>%
     mutate(all_te = "spv",
-          component = "Electricity CAPEX (for electrolysis)")
+          component = "Solar PV\n(for electrolysis)")
 
   # get the CAPEX for elh2
   # in USD/(W/a) capacity?? So divided by 1000 relative to generisdatatech.
@@ -382,7 +395,7 @@ calc_total_investments <- function(gdx) {
   # then, calculate the required capacity additions
   df.deltacap_elDem <- calculate_required_deltacap(df.elDem, df.capfac_el) %>%
     mutate(all_te = "spv",
-          component = "Electricity CAPEX (other)")
+          component = "Solar PV (other steel-\nrelated demand)")
 
   df.Inv_el <- df.deltacap_elDem %>% 
     left_join(df.CAPEX, by=c("region", "period", "all_te")) %>%
@@ -524,7 +537,8 @@ combine_investment_costs <- function(scenarios) {
     calc_total_investments(scen$gdx) %>% mutate(scenario = scen$name)
   })
   df.totalcosts <- bind_rows(dfs) %>%
-    filter(period >= 2030, period <= 2045) %>%
+    # filter(period >= 2030, period <= 2045) %>%
+    filter(period >= 2025, period <= 2045) %>%
     mutate(period = as.numeric(period)) %>%
     mutate(value = value * 1000) #convert to billion USD
 }
@@ -549,7 +563,14 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
       component = factor(component, levels = component_order[component_order %in% unique(component)]), 
       scenario = factor(scenario, levels = scen_order)
     )
-  # print(plot_df)
+
+  # to get y axis limit
+  totals <- plot_df %>%
+    group_by(period, scenario) %>%
+    summarise(total = sum(value, na.rm = TRUE)) %>%
+    ungroup()
+  max_y <- max(totals$total)
+
   # get the components in the df
   present_components <- levels(plot_df$component)
 
@@ -558,12 +579,15 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
 
   # get average investments required
   avg_investments <- plot_df %>%
+  # start average over the first calculated timestep (2030 = 2026-2030 investments)
+    filter(period >= 2030) %>%
     group_by(period, scenario) %>%
     summarise(value = sum(value, na.rm = TRUE)) %>%
     ungroup() %>%
     group_by(scenario) %>%
     summarise(mean = mean(value, na.rm = TRUE)) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(type = "Nominal average\n(2030-2045)")
 
   # plot
   region_plot <- ggplot() +
@@ -574,31 +598,247 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
             width=3) +
     scale_fill_manual(values = present_colors) +
     facet_wrap(~ scenario, nrow = 3) +
+    scale_x_continuous(
+      breaks = sort(unique(plot_df$period)),
+      labels = sort(unique(plot_df$period))) +
     # add dashed line for average
-    geom_hline(data = avg_investments, aes(yintercept = mean), linetype="dashed", color = "black") +
-    # add label
-    geom_text(data = avg_investments, aes(x = 2037, y = mean + 5,
-                                          label = paste0("Nominal average investments:\n", round(mean,1), " Bill. USD/yr")),
-                                          color = "black", size = 4, inherit.aes = FALSE) +
+    # geom_hline(data = avg_investments, aes(yintercept = mean), linetype="dashed", color = "black") +
+    # # add label
+    # geom_text(data = avg_investments, aes(x = 2037, y = mean + 5,
+    #                                       label = paste0("Nominal average investments:\n", round(mean,1), " Bill. USD/yr")),
+    #                                       color = "black", size = 4, inherit.aes = FALSE) +
     labs(
-      title = paste0("Steel sector investment costs (",
-                    region_names$region_name[region_names$region == region_to_plot]
-                    , ")"),
-      x = "Year",
-      y = "Investment costs\n(Bill. USD) per year",
-      fill = "Component"
+      # title = paste0(
+      #   region_names$region_name[region_names$region == region_to_plot],
+      #   " annual steel sector investments\n\n"),
+      x = "",
+      y = "Annual investments\n(Bill. USD)",
+      fill = "CAPEX"
     ) +
-    guides(fill=guide_legend(ncol=2)) +
-    theme_bw(base_size = 14) +
+    scale_y_continuous(limits = c(0, max_y * 1.1)) +
+    guides(fill=guide_legend(
+      ncol=2,
+      )) +
+    theme_bw(base_size = 9) +
     theme(
       panel.grid.minor = element_blank(),
       strip.text = element_text(face = "bold"),
-      legend.position = "bottom"
+      legend.text = element_text(size = 6),
+      legend.position = "bottom",
+      legend.title.position = "top",
+      legend.key.size = unit(0.8,"line"),
+      plot.margin = margin(10, 5, 5, 5)
     ) 
-  # print(region_plot)
+  
+  avg_plot <- ggplot(avg_investments, aes(x = type, y = mean)) +
+    geom_bar(stat = "identity", fill = "#adaaaa", width = 0.8) +
+    facet_wrap(~ scenario, nrow = 3) +
+    geom_text(aes(label = round(mean, 1)), vjust = -0.5, size = 2.5, color = "grey50") +
+    labs(
+      # title = paste0(
+      #   region_names$region_name[region_names$region == region_to_plot],
+      #   " average annual\nsteel sector\ninvestments"),
+      # x = "",
+      # y = "Investment costs\n(Bill. USD) per year"
+    ) +
+    theme_bw(base_size = 9) +
+    scale_y_continuous(limits = c(0, max_y * 1.1)) +
+    theme(
+      panel.grid.minor = element_blank(),
+      legend.position = "none",
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      strip.text = element_text(face = "bold", color = "white"),
+      strip.background = element_rect(fill = "white", color = "white"),
+      # strip.background = element_blank(),
+      plot.margin = margin(10, 10, 98.5, 5)
+    )
+
+  combined_plot <- ggarrange(
+    region_plot, avg_plot, ncol = 2, widths = c(3, 1),
+    labels = c("a", "b"),
+    font.label = list(size = 10, face = "bold"))
+    
+    
+  if(save_plot){
+    ggsave(
+      paste0("figs/investment_costs_v0_", region_to_plot, ".png"),
+      plot = combined_plot,
+      width = 88, height = 130, unit = "mm",dpi = 300)
+    ggsave(
+      paste0("figs/investment_costs_v0_", region_to_plot, ".svg"),
+      plot = combined_plot,
+      width = 88, height = 130, unit = "mm")
+  }
+}
+
+
+plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_plot = FALSE){
+  if(region_to_plot == "Global"){
+    df.totalcosts <- df.totalcosts %>%
+      mutate(value = ifelse(is.na(value), 0, value)) %>%
+      group_by(period, scenario, component) %>%
+      summarise(value = sum(value)) %>%
+      ungroup() %>%
+      mutate(region = "Global")
+  }
+
+  plot_df <- df.totalcosts %>%
+    filter(region == region_to_plot) %>%
+  # # remove fesos and fegas
+    filter(!component %in% c("fesos", "fegas")) %>%
+    mutate(
+      period = as.integer(period),
+      component = factor(component, levels = component_order[component_order %in% unique(component)]), 
+      scenario = factor(scenario, levels = scen_order)
+    )
+
+  # get the components in the df
+  present_components <- levels(plot_df$component)
+
+  # subset the colors vector
+  present_colors <- component_colors[present_components]
+
+  # get average investments required
+  avg_investments <- plot_df %>%
+    # start average over the first calculated timestep (2030 = 2026-2030 investments)
+    filter(period >= 2030) %>%
+    group_by(period, scenario) %>%
+    summarise(value = sum(value, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(scenario) %>%
+    summarise(mean = mean(value, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith lock-in"))) %>%
+    mutate(scenario = factor(scenario, levels = c("Current\npolicies", "Transition\nwith lock-in", "Fast\nTransition")))
+
+  # scenario offset for stacked bar
+  scenario_offsets <- setNames(seq(0, by = 1.2, length.out = length(scen_order)), scen_order)
+  plot_df <- plot_df %>%
+    mutate(period_offset = period + scenario_offsets[as.character(scenario)])
+  
+  # get year labels, to be added manually
+  year_centers <- plot_df %>%
+    distinct(period, period_offset) %>%
+    group_by(period) %>%
+    summarise(x_center = mean(period_offset)) %>%
+    arrange(x_center)
+
+  #scenario labels
+  scen_labels <- plot_df %>%
+    distinct(period_offset, scenario) %>%
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast Transition", ifelse(scenario == "Current policies", "Current policies", "Transition with\nlock-in")))
+
+  totals <- plot_df %>%
+    group_by(period_offset, scenario) %>%
+    summarise(total = sum(value, na.rm = TRUE)) %>%
+    ungroup()
+
+  max_y <- max(totals$total, na.rm = TRUE)
+  y_min  <- -0.5 * max(1, max_y)
+  y_scen <- y_min * 0.5
+  
+  # plot
+  region_plot <- ggplot(plot_df, aes(x = period_offset, y = value, fill = component)) +
+    geom_bar(stat = "identity", position = "stack", width = 1.1) +
+    geom_text(
+      data = transform(scen_labels, y = y_scen),
+      aes(x = period_offset, y = y, label = scenario),
+      inherit.aes = FALSE,
+      angle = 90,
+      vjust = 0.5,
+      size = 2,
+      fontface = "plain"
+    ) +
+    scale_fill_manual(values = present_colors) +
+    scale_x_continuous(
+      breaks = year_centers$x_center,
+      labels = year_centers$period
+    ) +
+    scale_y_continuous(
+      limits = c(y_min, max_y),
+      # hide negative values (space used for annotations)
+      breaks = function(lims) {
+        b <- scales::breaks_extended(n=6)(c(0,lims[2]))
+        b[b >= 0]
+      },
+      minor_breaks = NULL,
+      expand = expansion(mult = c(0, 0.05))) +
+    labs(
+      title = paste0(
+        region_names$region_name[region_names$region == region_to_plot],
+        " annual steel sector investments"),
+      subtitle = "(including supply side investments such as solar PV and electrolysis)\n",
+      x = "Scenario and year",
+      y = "Annual investments\n(Bill. USD p. a.)",
+      fill = "CAPEX"
+    ) +
+    guides(fill = guide_legend(ncol = 1)) +
+    theme_bw(base_size = 8) +
+    coord_cartesian(clip = "off") +
+    theme(
+      panel.border = element_blank(),
+      panel.grid.major.y = element_line(linewidth = 0.3, color = "#dbd8d8"),
+      panel.grid.major.x = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "right",
+      legend.title.position =  "top",
+      legend.box.margin = margin(-40, 0, 0, 0),
+      legend.margin = margin(0, 0, 0, 0),
+      legend.key.size = unit(0.8,"line"),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      plot.margin = margin(10, 10, 40, 10)
+    )
+
+  avg_plot <- ggplot(avg_investments, aes(x = scenario, y = mean)) +
+    geom_bar(stat = "identity", fill = "#adaaaa", width = 0.8) +
+    geom_text(aes(label = round(mean, 1)), vjust = -0.5, color = "grey50") +
+    labs(
+      title = paste0(
+        region_names$region_name[region_names$region == region_to_plot],
+        " average annual\nsteel sector investments"),
+      subtitle = "(2030-2045)",
+      x = "Scenario",
+      y = "Annual investments\n(Bill. USD p. a.)"
+    ) +
+    scale_y_continuous(
+      limits = c(0, max_y),
+      breaks = function(lims) {
+        b <- scales::breaks_extended(n=6)(c(0,lims[2]))
+      },
+      ) +
+    theme_bw(base_size = 8) +
+    theme(
+      panel.border = element_blank(),
+      panel.grid.major.y = element_line(linewidth = 0.3, color = "#dbd8d8"),
+      panel.grid.major.x = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(face = "bold"),
+      legend.position = "bottom",
+      plot.margin = margin(10, 20, 60, 5)
+    )
+
+  combined_plot <- ggarrange(
+    region_plot, avg_plot,
+    labels = c("a", "b"), ncol = 2, nrow=1,
+    widths = c(2.8,1),
+    font.label = list(size = 12, face = "bold")
+    )
 
   if(save_plot){
-    ggsave(paste0("figs/investment_costs_", region_to_plot, ".png"), plot = region_plot, width = 8, height = 11, dpi = 300)
+    ggsave(
+      paste0("figs/investment_costs_", region_to_plot, ".png"),
+      plot = combined_plot,
+      width = 180, height = 90, units = "mm", dpi = 300)
+    ggsave(
+      paste0("figs/investment_costs_", region_to_plot, ".svg"),
+      plot = combined_plot,
+      width = 180, height = 90, unit = "mm")
   }
 }
 
@@ -645,8 +885,8 @@ plot_avg_invst_capex <- function(df.totalcosts, final_year,  discount_rate, regi
                     region_names$region_name[region_names$region == region_to_plot],
                     ", \nbetween today and", final_year),
       x = "Year",
-      y = "Investment costs\n(Bill. USD) per year",
-      fill = "Component"
+      y = "Annual investments\n(Bill. USD)",
+      fill = "CAPEX"
     ) +
     guides(fill=guide_legend(nrow=3)) +
     theme_bw(base_size = 14) +
@@ -710,7 +950,7 @@ plot_avg_invst_fossil <- function(df.totalcosts, final_year, discount_rate, regi
                     ", \nbetween today and", final_year),
       x = "Year",
       y = "Investment costs\n(Bill. USD) per year",
-      fill = "Component"
+      fill = "CAPEX"
     ) +
     guides(fill=guide_legend(nrow=3)) +
     theme_bw(base_size = 14) +
