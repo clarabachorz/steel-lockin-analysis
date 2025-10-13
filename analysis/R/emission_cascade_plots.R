@@ -9,26 +9,12 @@ library(gridExtra)
 library(grid)
 library(purrr)
 library(waterfalls)
+library(ggpubr)
 
 
 require("quitte")
 library("quitte")
 
-# mifdata1 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif")
-
-# mifdata2 <- read.quitte("inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif")
-
-# mifdata3 <- read.quitte("inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif")
-
-
-# mifdata1 <- mifdata1 %>%
-#   mutate(scenario = "NPi")
-
-# mifdata2 <- mifdata2 %>%
-#   mutate(scenario = "Fast transition")
-
-# mifdata3 <- mifdata3 %>%
-#   mutate(scenario = "Extended lock-in")
 
 calc_cumuem <- function(df, region_to_calculate) {
   df %>%
@@ -76,44 +62,44 @@ region_groups <- list(
 
 # old colors: not used for consistency with Fig 1, but probably look better
 region_order = c(
-  "CHA" = "#e41c23",
-  "IND"="#ff7f00",
-  "OAS"="#eea810",
-  "OASLAM" = "#eea810",
-  "SSA"="#06723e",
+  "CHA" = "#dc050c",
+  "IND"="#f1932d",
+  "OAS"="#f7f056",
+  "OASLAM" = "#f7f056",
+  "SSA"="#4eb265",
   "REF"="#aac90d",
   "LAM"="#c90dbc",
   "JPN"="#d4c7b1",
   "MEA"="#0ada5a",
   "USA"="#08a0e4",
-  "EUR"="#0912c3",
-  "EUR+NEU+USA+JPN+REF+CAZ" = "#110a9a",
+  "EUR"="#1965b0",
+  "EUR+NEU+USA+JPN+REF+CAZ" = "#1965b0",
   "NEU"="#c9b60d",
   "CAZ"="#08e4a0")
 
-region_labels <- c(
+region_labels_emissions <- c(
   "CHA" = "China",
   "SSA" = "Sub-saharan Africa",
   "IND" = "India",
-  "EUR+NEU+USA+JPN+REF+CAZ" = "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries",
+  "EUR+NEU+USA+JPN+REF+CAZ" = "Global North",
   "OASLAM" = "Other Asia and Latin America",
   "MEA" = "Middle East and North Africa"
 )
 
-col_useur <- "#110a9a"
-col_cha <- "#e41c23"
-col_ind <- "#ff7f00"
-col_ssa <- "#06723e"
-col_oas <- "#eea810"
-col_mea <- "#0ada5a"
+col_useur <- "#1965b0"
+col_cha <- "#dc050c"
+col_ind <- "#f1932d"
+col_ssa <- "#4eb265"
+col_oas <- "#f7f056"
+col_mea <- "#ae76a3"
 
 fill_colors = c(
       "China" = col_cha,
-      "Sub-saharan Africa" = col_ssa,
       "India" = col_ind,
-      "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries" = col_useur,
       "Other Asia and Latin America" = col_oas,
-      "Middle East and North Africa" = col_mea
+      "Sub-saharan Africa" = col_ssa,
+      "Middle East and North Africa" = col_mea,
+      "Global North" = col_useur
 )
 
 plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
@@ -173,7 +159,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
     df_aac <- df_aac %>%
           mutate(
             x_pos = case_when(
-            scenario1 == "NPi" & scenario2 == "Transition with lock-in" ~ region_xpos[as.character(region)] +2,
+            scenario1 == "Current policies" & scenario2 == "Transition with lock-in" ~ region_xpos[as.character(region)] +2,
             scenario1 == "Transition with lock-in" & scenario2 == "Fast transition" ~ region_xpos[as.character(region)] + 9
             )
         ) %>%
@@ -185,13 +171,13 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
   #get region colors from list above
   region_colors <- c(
-    "NPi" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
+    "Current policies" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
     region_order,
     setNames(region_order, paste0(names(region_order), "_2"))
   )
 
   plot_df$region <- factor(plot_df$region, levels = names(region_order))
-  plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Transition with lock-in", "Fast transition"))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with lock-in", "Fast transition"))
 
   # Get total emissions by scenario
   total_df <- plot_df %>%
@@ -209,7 +195,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
   # Build waterfall data: baseline total, region contributions, final totals
   waterfall_data <- bind_rows(
-    tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
+    tibble(label = "Current policies", value = total_df$total[total_df$scenario == "Current policies"], type = "total"),
     cascade_df %>% filter(scenario == "Transition with lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
     # tibble(label = "Transition with lock-in", value = total_df$total[total_df$scenario == "Transition with lock-in"], type = "total"),
     tibble(label = "Transition with lock-in", value = FALSE, type = "total"),
@@ -233,29 +219,29 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
   # custom x ticks
   labels_vec <- as.character(waterfall_data$label)
-  labels_vec <- ifelse(labels_vec %in% c("NPi", "Transition with lock-in", "Fast transition"), labels_vec, " ")
+  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with lock-in", "Fast transition"), labels_vec, " ")
 
   # Create waterfall chart using ggwaterfall
   wf_plot <- waterfall(waterfall_data, 
             rect_text_labels = waterfall_data$label2,
-            rect_text_size = 2.5,
+            rect_text_size = 1.5,
             put_rect_text_outside_when_value_below = 20,
             fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
     # scale_x_discrete(labels = label_fun)+
     labs(
-      title = "Breakdown of cumulative CO2 Emissions from steel production in 2070\n(2025 to 2070)",
+      title = "Breakdown of cumulative CO2 Emissions from steel production\n(2025 to 2070)",
       x = "Scenario",
-      y = "Cumulative emissions (Gt CO2)",
+      y = "Cumulative emissions\n(Gt CO2)",
       fill = "Region"
     ) +
-    theme_bw(base_size = 25)
+    theme_bw(base_size = 10)
 
   plot_df <- plot_df %>%
     filter(period == end_year) %>%
     #need to specify xpos for the cumulative emissions bars (stacked)
     mutate(
       x_pos = ifelse(
-        scenario == "NPi",
+        scenario == "Current policies",
         1,
         ifelse(scenario == "Transition with lock-in", 8, 15)))
 
@@ -277,7 +263,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
 
   plot_df <- plot_df %>%
-    mutate(region = recode(region, !!!region_labels))
+    mutate(region = recode(region, !!!region_labels_emissions))
 
   # complete the plot with the stacked bars and the aac annotations
   wf_plot <- wf_plot +
@@ -296,8 +282,8 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
       legend.position = "right",
       legend.title.position = "top",
       legend.title = element_text(hjust = 0.5),
-      legend.key.width = unit(1, "cm"),
-      legend.key.height = unit(1, "cm"))
+      legend.key.width = unit(0.5, "cm"),
+      legend.key.height = unit(0.5, "cm"))
 
   if(show_aac_annotations){
     wf_plot <- wf_plot +
@@ -305,22 +291,36 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
     geom_text(
         data = df_aac,
         aes(x = x_pos, y = y_pos, label = paste0("$", round(fscp, 0), "\n/tCO2")),
-        color = "black", size = 5, fontface = "bold", inherit.aes = FALSE
+        color = "#767575", size = 2.5, fontface = "bold", inherit.aes = FALSE
     )
   }
-
-  ggsave("figs/cascade_cumu_emi_scen.png", wf_plot, width = 12, height = 8, dpi = 300)
   
   return(wf_plot)
 
 
  }
 
+combine_cascade_cumueum_and_co2value_plot <- function(mif_list, df_aac_combined, p_scenariocost_vs_co2value, show_aac_annotations = TRUE) {
+
+  # plot cumu emission cascade figure
+  p_cascade <- plot_cascade_cumuem(mif_list, df_aac_combined, show_aac_annotations = show_aac_annotations)
+
+  ## combine emission cascade and abatement cost vs co2 value plot:
+  p_combined <- ggarrange(
+    p_cascade, p_scenariocost_vs_co2value,
+    labels = c("a", "b"), ncol = 1, nrow=2,
+    heights = c(2,1),
+    font.label = list(size = 16, face = "bold")
+    )
+  # p_combined
+  ggsave("./figs/combined_cascade_and_cost_vs_co2value.png", p_combined, width = 180, height = 180, units = "mm")
+}
+
 plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   #get region colors from list above
   region_colors <- c(
-    "NPi" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
+    "Current policies" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
     region_order,
     setNames(region_order, paste0(names(region_order), "_2"))
   )
@@ -344,7 +344,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
 
   plot_df$region <- factor(plot_df$region, levels = names(region_order))
-  plot_df$scenario <- factor(plot_df$scenario, levels = c("NPi", "Transition with lock-in", "Fast transition"))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with lock-in", "Fast transition"))
 
   # Get total emissions by scenario
   total_df <- plot_df %>%
@@ -362,7 +362,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   # Build waterfall data: baseline total, region contributions, final totals
   waterfall_data <- bind_rows(
-    tibble(label = "NPi", value = total_df$total[total_df$scenario == "NPi"], type = "total"),
+    tibble(label = "Current policies", value = total_df$total[total_df$scenario == "Current policies"], type = "total"),
     cascade_df %>% filter(scenario == "Transition with lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
     tibble(label = "Transition with lock-in", value = FALSE, type = "total"),
     cascade_df %>% filter(scenario == "Fast transition") %>%
@@ -381,7 +381,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   # custom x ticks
   labels_vec <- as.character(waterfall_data$label)
-  labels_vec <- ifelse(labels_vec %in% c("NPi", "Transition with lock-in", "Fast transition"), labels_vec, " ")
+  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with lock-in", "Fast transition"), labels_vec, " ")
 
 
   # Create waterfall chart using ggwaterfall
@@ -399,7 +399,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   plot_df <- plot_df %>%
     # filter(period == 2050) %>%
-    mutate(x_pos = ifelse(scenario == "NPi", 1, ifelse(scenario == "Transition with lock-in", 8, 15))) #%>%
+    mutate(x_pos = ifelse(scenario == "Current policies", 1, ifelse(scenario == "Transition with lock-in", 8, 15))) #%>%
 
   wf_plot <- wf_plot +
     geom_bar(data = plot_df,
