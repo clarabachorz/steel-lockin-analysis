@@ -360,19 +360,19 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
                 y = "Average abatement cost (USD/tCO2)"
             ) +
             scale_fill_manual(values = c(
-                "CHA" = "#e41c23",
-                "IND" = "#ff7f00",
-                "EUR" = "#110a9a",
-                "EUR+NEU+USA+JPN+REF+CAZ" = "#4870b9",
-                "OAS" = "#f6da23",
-                "OASLAM" = "#f6da23",
+                "CHA" = "#dc050c",
+                "IND" = "#f1932d",
+                "EUR" = "#1965b0",
+                "EUR+NEU+USA+JPN+REF+CAZ" = "#1965b0",
+                "OAS" = "#f7f056",
+                "OASLAM" = "#f7f056",
                 "NEU" = "#1ea6f0",
                 "REF" = "#b2df8a",
                 "USA" = "#33a02c", 
                 "JPN" = "#f8f2f2",
                 "LAM" = "#a65628",
-                "SSA" = "#103b17",
-                "MEA" = "#0bbda5")) +
+                "SSA" = "#4eb265",
+                "MEA" = "#ae76a3")) +
             ylim(0, 350) +
             xlim(0,70)
     }
@@ -394,7 +394,7 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
 #' @param end_date End year (e.g., 2075) for the discounting, and for the cumulative sum if it is taken
 #' @param discount_rate Discount rate (e.g., 0.05 for 5%)
 #' @return List with total_df_grouped (data frame with cost difference and value of avoided emissions by region) and plot (ggplot object)
-run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, start_date, end_date, discount_rate) {
+run_scenario_cost_andCO2value_comparison <- function(scen1, scen2, region_to_aggr, start_date, end_date, discount_rate) {
     
     # Plot order
     region_order <- c("EUR+NEU+USA+JPN+REF+CAZ", "CHA", "IND", "OASLAM", "MEA", "SSA")
@@ -507,35 +507,38 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
                 position = position_dodge(width = 0.7),
                 width = 0.6,
                 # color = "#bdb9b9",
-                color = "#212020",
-                pattern_fill = "#212020",
-                pattern_color = "#212020",
+                color = "black",
+                pattern_fill = "#c9c4c4",
+                pattern_color = "#c9c4c4",
                 pattern_angle = 45,
                 pattern_density = 0.25,
                 pattern_spacing = 0.08,
                 pattern_key_scale_factor = 0.5
                 ) +
             labs(
-                title = paste0("The value of abating additional CO2 in ", scen2_name, " compared to\n", scen1_name,  ": additional abatement cost vs. value of avoided CO2\n(discount rate: ", discount_rate * 100, "%, dates: ", start_date, "-", end_date, ")"),
+                title = paste0(
+                    "The value of abating additional CO2 in ",
+                    scen2_name,
+                    " compared\nto ",
+                    scen1_name, 
+                    " (discount rate: ", discount_rate * 100, "%)."),
+                # title = bquote(
+                #             atop("The value of abating additional CO"[2]~"in"~italic(.(scen2_name))~"  ",
+                #             "compared to"~italic(.(scen1_name))~"(discount rate:"~.(discount_rate * 100)~"%)")),
                 x = "Region",
-                y = "Value (bill. USD)",
+                y = "Value and costs\n(bill. USD)",
                 pattern = "Cost type"
             ) +
-            theme_bw(base_size = 25) +
+            theme_bw(base_size = 10) +
             scale_pattern_manual(
                 values = c("cost_diff" = "none", "value_em" = "stripe"),
                 labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"),
             ) +
             scale_fill_manual(values = c(
-                "China" = "#e41c23",
-                "India" = "#ff7f00",
-                "Global North" = "#110a9a"),
+                "China" = "#dc050c",
+                "India" = "#f1932d",
+                "Global North" = "#1965b0"),
                 guide = "none") +
-            # scale_fill_manual(values = c(
-            #     "cost_diff" = "#4888b9",
-            #     "value_em" = "#33a02c"
-            # ), labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"
-            # )) +
             theme(
                 axis.text.x = element_text(hjust = 0.5),
                 panel.border = element_blank(),
@@ -544,7 +547,8 @@ run_abatement_andCO2price_comparison <- function(scen1, scen2, region_to_aggr, s
                 axis.ticks = element_blank(),
                 legend.position = "right",
                 legend.title.position = "top",
-                legend.title = element_text(hjust = 0.5)
+                legend.title = element_text(hjust = 0.5),
+                legend.key.size = unit(0.8,"line")
                 )
     }
 
