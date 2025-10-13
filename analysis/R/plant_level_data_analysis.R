@@ -83,23 +83,23 @@ region_labels <- c(
   "CHA" = "China",
   "SSA" = "Sub-saharan Africa",
   "IND" = "India",
-  "USAEUR" = "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries",
+  "USAEUR" = "Global North",
   "OASLAM" = "Other Asia and Latin America",
   "MEA" = "Middle East and North Africa"
 )
 
-col_useur <- "#110a9a"
-col_cha <- "#e41c23"
-col_ind <- "#ff7f00"
-col_ssa <- "#06723e"
-col_oas <- "#eea810"
-col_mea <- "#0ada5a"
+col_useur <- "#1965b0"
+col_cha <- "#dc050c"
+col_ind <- "#f1932d"
+col_ssa <- "#4eb265"
+col_oas <- "#f7f056"
+col_mea <- "#ae76a3"
 
 fill_colors = c(
       "China" = col_cha,
       "Sub-saharan Africa" = col_ssa,
       "India" = col_ind,
-      "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries" = col_useur,
+      "Global North" = col_useur,
       "Other Asia and Latin America" = col_oas,
       "Middle East and North Africa" = col_mea
 )
@@ -498,24 +498,22 @@ plot_regional_production <- function(save_plot=FALSE){
     mutate(OASLAM = OAS + LAM) %>%
     select(-OAS, -USA, -EUR, -REF, -NEU, -JPN, -CAZ, -LAM, -MEA) %>%
     pivot_longer(cols = c(CHA, USAEUR, SSA, IND, OASLAM)) %>%
-    mutate(Region = recode(name, !!!region_labels)) %>% 
+    mutate(Region = recode(name, !!!region_labels)) %>%
     mutate(alpha = ifelse(type == "bof", 0.7, ifelse(type == "eaf", 0.5,0.3))) %>%
-    mutate(Region = factor(Region, levels = c("First wave:","USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries",
+    mutate(Region = factor(Region, levels = c("First wave:","Global North",
                                               "China","India",
                                               "Other Asia and Latin America",
                                               "Sub-saharan Africa"
                                               ))) %>%
-    filter(Historic_Time < 2071) %>%
+    filter(Historic_Time < 2051) %>%
     #sum up different production routes (eaf/bof etc)
     group_by(Historic_Time, Region, name) %>%
     summarise(value = sum(value, na.rm = TRUE)) %>%
     ungroup()
 
-
   p <- ggplot(data = df_plot_production,
               aes(x = Historic_Time, y = value, fill = Region)) +
-    geom_rect(aes(xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf), fill = "#d8d8d26e", alpha = 0.15) +
-    geom_area(alpha = 0.7) +
+    geom_area(alpha = 1) +
     scale_fill_manual(
       values = fill_colors,
       breaks = names(fill_colors),
@@ -527,22 +525,25 @@ plot_regional_production <- function(save_plot=FALSE){
         #   alpha = c(0, 0.7, 0.7, 0.7, 0.7, 0.7)
         # )
       )) +
-    theme_bw() +
-    labs(title = "Historical primary steel production for key regions (by production type)",
-        x = "Year",
+    # geom_rect(aes(xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf), fill = "#6a6a6951", alpha = 0.15) +
+    annotate("rect", xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf, fill = "#6a6a6951", alpha = 0.15) +
+    scale_x_continuous(breaks = seq(1900, 2050, by = 25)) +
+    theme_bw(base_size = 8) +
+    labs(title = "Regional historical primary steel production\n",
+        # x = "Year",
         y = "Primary steel production (Mt/yr)",
         colour = "Region") +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 11),
-      # legend.position = "bottom",
+      # plot.title = element_text(hjust = 0.5, size = 11),
       panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+      axis.title.x = element_blank()
     )
     
   p <- p +  
     #add segment and annotation
     #US/EUR
     geom_segment(aes(
-      x = 1950, xend = 1965, y = 250, yend = 250), 
+      x = 1950, xend = 1958, y = 250, yend = 250), 
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_useur, show.legend = FALSE) +
     annotate("rect", 
@@ -550,44 +551,41 @@ plot_regional_production <- function(save_plot=FALSE){
             ymin=200, ymax=370,
             alpha=0.4, color = col_useur, fill = "white") +
     annotate("text", x = 1940,
-        y = 250, 
-        #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
-        label ="1st wave:\nGlobal North,\npost WW2",
+        y = 250,
+        label ="1st wave:\nGlobal North, post WW2",
           hjust = 0.8, vjust = 0.1,
-          lineheight = 0.9, size = 2.8) +
+          lineheight = 0.9, size = 2.1) +
     #CHA
     geom_segment(aes(
       x = 1995, xend = 2010, y = 670, yend = 670), 
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_cha, show.legend = FALSE) +
-    annotate("rect", 
+    annotate("rect",
             xmin= 1958, xmax=1995,
             ymin=600, ymax=740,
             alpha=0.4, color = col_cha, fill = "white") +
     annotate("text", x = 1990,
-        y = 600, 
-        #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+        y = 590,
         label ="2nd wave:\nChina, 2000s",
           hjust = 0.9, vjust = -0.3,
-          lineheight = 0.9, size = 2.8) +
+          lineheight = 0.9, size = 2.1) +
     #IND
     geom_segment(aes(
-      x = 2005, xend = 2040, y = 1100, yend = 500), 
+      x = 2005, xend = 2030, y = 1100, yend = 420), 
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_ind, show.legend = FALSE) +
     annotate("rect", 
             xmin= 1957, xmax=2005,
-            ymin=1030, ymax=1210,
+            ymin=970, ymax=1210,
             alpha=0.4, color = col_ind, fill = "white") +
     annotate("text", x = 2000,
-        y = 1060, 
-        #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+        y = 970,
         label ="3rd wave:\nIndia, other Asia,\nLatin America, from today",
           hjust = 0.9, vjust = -0.2,
-          lineheight = 0.9, size = 2.8) +
+          lineheight = 0.9, size = 2.1) +
     #SSA
     geom_segment(aes(
-      x = 2007, xend = 2065, y = 1300, yend = 200), 
+      x = 2007, xend = 2049, y = 1300, yend = 100), 
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_ssa, show.legend = FALSE) +
     annotate("rect", 
@@ -595,29 +593,30 @@ plot_regional_production <- function(save_plot=FALSE){
             ymin=1240, ymax=1380,
             alpha=0.4, color = col_ssa, fill = "white") +
     annotate("text", x = 2002,
-        y = 1270, 
-        #  label = str_wrap("1st wave: Global North, post WW2", width = 25),
+        y = 1250,
         label ="4th wave:\nSSA, near future",
           hjust = 0.9, vjust = -0.1,
-          lineheight = 0.9, size = 2.8) +
+          lineheight = 0.9, size = 2.1) +
     geom_vline(xintercept = 2022, linetype = "solid", size = 0.4 , color = "#565555") +
-    ylim(0, 1800) +
+    ylim(0, 1950) +
     annotate("rect", 
-            xmin= 1990, xmax=2020,
-            ymin=1700, ymax=1800,
+            xmin= 2014, xmax=2020,
+            ymin=1570, ymax=1950,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
-    annotate("text", x = 2005,
+    annotate("text", x = 2017,
         y = 1750,
-        label ="Historic\ndata",
-          lineheight = 0.9, size = 2.8)+
+        label ="Historic data",
+        color = "grey50",
+        lineheight = 0.9, size = 2.1, angle = 90)+
     annotate("rect", 
-            xmin= 2030, xmax=2070,
-            ymin=1700, ymax=1800,
+            xmin= 2024, xmax=2030,
+            ymin=1550, ymax=1950,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
-    annotate("text", x = 2050,
+    annotate("text", x = 2027,
         y = 1750,
         label ="Scenario data",
-          lineheight = 0.9, size = 2.8) +
+        color = "grey50",
+        lineheight = 0.9, size = 2.1, angle = 90) +
     #add circle annotations (1/2/3/4)
     annotate("point", x = 1904, y = 370, shape = 21, size = 5, fill = "white", color = col_useur) +
     annotate("point", x = 1958, y = 740, shape = 21, size = 5, fill = "white", color = col_cha) +
@@ -629,10 +628,10 @@ plot_regional_production <- function(save_plot=FALSE){
     annotate("text", x = 1957, y = 1185, label = "3", color = col_ind, size = 3) +
     annotate("text", x = 1962, y = 1375, label = "4", color = col_ssa, size = 3)
 
-  print(p)
   if(save_plot){
     ggsave("figs/BOF_regional_production_plot_wprojections.png", p, width = 8, height = 6, dpi = 300)
   }
+  return(p)
 }
 
 
@@ -685,7 +684,7 @@ plot_capacity_additions <- function(save_plot=FALSE){
                                           "Sub-saharan Africa",
                                           "Other Asia and Latin America",
                                           "India","China", 
-                                          "USA, Europe, Russia, Canada,\nNew Zealand, Australia,\nJapan and ex-USSR countries"))) %>% 
+                                          "Global North"))) %>% 
     filter(!(is.na(value)))
 
   df_plot_capacity <- df_plot_capacity %>%
@@ -710,54 +709,65 @@ plot_capacity_additions <- function(save_plot=FALSE){
     scale_fill_manual(
       values = fill_colors,
       breaks = names(fill_colors)) +
-    theme_bw() +
+    theme_bw(base_size = 8) +
   labs(
     # title = "Regional BF-BOF capacity additions\n(historical, new announcements as of June 2025\nand scenario data)",
-        title = "Regional BF-BOF capacity additions\n(historical and new announcements as of June 2025)",
-        x = "Year",
+        title = "Regional BF-BOF capacity additions\n(new announcements as of June 2025)",
+        # x = "Year",
         y = "BF-BOF capacity additions (Mtpa)",
         fill = "Region") +
-    scale_x_continuous(breaks = seq(start_year, end_year, by = 10),
+    scale_x_continuous(breaks = seq(start_year, end_year, by = 25),
                       limits = c(start_year,end_year)) +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 11),
-      # legend.position = "bottom",
+      # plot.title = element_text(hjust = 0.5, size = 11),
       panel.border = element_rect(color = "black", fill = NA, size = 0.5),
-      #rotate xticks
-      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+      axis.text.x = element_text(angle = 0),
+      axis.title.x = element_blank()
     ) +
     geom_vline(xintercept = 2025, linetype = "solid", size = 0.4 , color = "#565555") +
-    # geom_rect(aes(xmin = 2025, xmax = end_year, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.2)
     geom_rect(aes(xmin = start_year, xmax = 2025, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.15) +
-    # ylim(0, 800) +
     annotate("rect", 
-            xmin= 1990, xmax=2020,
-            # ymin=710, ymax=790,
-            ymin=320, ymax=360,
+            xmin= 2015, xmax=2022,
+            ymin=260, ymax=340,
+            # ymin=130, ymax=170,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
-    annotate("text", x = 2005,
-        y = 340,#750,
-        label ="Historic\ndata",
-          lineheight = 0.9, size = 2.6)+
+    annotate("text", x = 2018,
+        y = 300, #150
+        label ="Historic data",
+        color = "grey50",
+        lineheight = 0.9, size = 2.1, angle = 90)+
     annotate("rect", 
-            xmin= 2028, xmax=2055,
-            # ymin=710, ymax=790,
-            ymin=320, ymax=360,
+            xmin= 2028, xmax=2036,
+            ymin=235, ymax=360,
+            # ymin=115, ymax=180,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
-    annotate("text", x = 2042,
-        y = 340,#750,
-        # label ="New announcements+\nscenario data",
-        label ="New\nannouncements",
-          lineheight = 0.9, size = 2.6)
+    annotate("text", x = 2032,
+        y = 300,#150,
+        label ="New announcements",
+        color = "grey50",
+        lineheight = 0.9, size = 2.1, angle = 90)
 
-
-
-  print(p)
   if(save_plot){
     ggsave("figs/BOF_regional_capacity_additions_plot.png", p, width = 8, height = 6, dpi = 300)
   }
+  return(p)
 }
 
+plot_combine_production_and_cap_additions <- function(save_plot=FALSE){
+  p1 <- plot_regional_production(save_plot=FALSE)
+  p2 <- plot_capacity_additions(save_plot=FALSE)
+
+  combined_plot <- ggarrange(p1, p2,
+                            ncol = 2, nrow = 1,
+                            widths = c(1.2, 1),
+                            labels = c("a", "b"),
+                            common.legend = TRUE, legend = "bottom",
+                            align = "v")
+  # print(combined_plot)
+  if(save_plot){
+    ggsave("figs/BOF_regional_production_and_capacity_additions_plot.png", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
+  }
+}
 
 plot_BFBOF_age_distribution <- function(save_plot=FALSE){
   #clean up age data df: missing ages are 0.
@@ -1015,16 +1025,15 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
         label ="New announcements+\nscenario data",
           lineheight = 0.9, size = 2.5) +
     #add circles
-    annotate("point", x = 1950, y = 253, shape = 21, size = 5, fill = "white", color = "#110a9a") +
-    annotate("point", x = 1995, y = 503, shape = 21, size = 5, fill = "white", color = "#e41c23") +
-    annotate("point", x = 2028, y = 263, shape = 21, size = 5, fill = "white", color = "#ff7f00",) +
-    annotate("point", x = 2045, y = 153, shape = 21, size = 5, fill = "white", color = "#06723e") +
+    annotate("point", x = 1950, y = 253, shape = 21, size = 5, fill = "white", color = col_useur) +
+    annotate("point", x = 1995, y = 503, shape = 21, size = 5, fill = "white", color = col_cha) +
+    annotate("point", x = 2028, y = 263, shape = 21, size = 5, fill = "white", color = col_ind,) +
+    annotate("point", x = 2045, y = 153, shape = 21, size = 5, fill = "white", color = col_ssa) +
       #add labels for circles
-    annotate("text", x = 1950, y = 250, label = "1", color = "#110a9a", size = 3) +
-    annotate("text", x = 1995, y = 500, label = "2", color = "#e41c23", size = 3) +
-    annotate("text", x = 2028, y = 260, label = "3", color = "#ff7f00", size = 3) +
-    annotate("text", x = 2045, y = 150, label = "4", color = "#06723e", size = 3)
-
+    annotate("text", x = 1950, y = 250, label = "1", color = col_useur, size = 3) +
+    annotate("text", x = 1995, y = 500, label = "2", color = col_cha, size = 3) +
+    annotate("text", x = 2028, y = 260, label = "3", color = col_ind, size = 3) +
+    annotate("text", x = 2045, y = 150, label = "4", color = col_ssa, size = 3)
 
 
   print(p)
