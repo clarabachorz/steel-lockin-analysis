@@ -164,207 +164,45 @@ ylab <- "Annual steel production (Mt/yr)"
 ```
 
 ```{r}
-# Subfigures for World and 6 Regions for each scenario.
-df_plot_grouped <- split(df_plot, df_plot$scenario)
-subfigs_world <- list()
-subfigs_regions <- list()
+regs <- c("World", "China", "India")
 
-for (scen in names(df_plot_grouped)) {
-  df_rows <- df_plot_grouped[[scen]]
-  df_rows$period[df_rows$period == 2070] <- 2067.5
-
-  # Subfigure for World.
-  df_rows_world <- df_rows %>% filter(region == "World")
-  subfigs_world[[scen]] <- ggplot(df_rows_world, aes(x = period, y = value, fill = variable)) +
-    geom_col(width = ifelse(df_rows_world$period == 2067.5, bar_width_double, bar_width_single)) +
-    facet_wrap(~ region) +
-    labs(title = scen_names[[scen]], x = NULL, y = ylab) +
-    theme_minimal() +
-    theme(
-      legend.position = "none",
-      plot.title = element_text(size = 7, face = "bold"),
-      axis.text.x = element_text(size = 5),
-      axis.title.y = element_text(size = 6),
-      axis.text.y = element_text(size = 5),
-      strip.text.x = element_text(size = 6),
-    ) +
-    scale_fill_manual(
-        values = plotstyle(as.character(levels(df_rows$variable))),
-        name = NULL,
-        labels = c(
-            "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
-            "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
-            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage (DRI-NG-EAF-CCS)",
-            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
-            "Primary steel using a blast furnace and a\nbasic oxygen furnace with carbon capture\nand storage (BF-BOF-CCS)",
-            "Primary steel using a blast furnace and a\nbasic oxygen furnace (BF-BOF)"
-        ),
-    ) +
-    guides(fill = guide_legend(nrow = 3, ncol = 2))
-
-  # Subfigure through facet_wrap for all other regions.
-  df_rows_regions <- df_rows %>% filter(region != "World")
-  subfigs_regions[[scen]] <- ggplot(df_rows_regions, aes(x = period, y = value, fill = variable)) +
-    geom_col(width = ifelse(df_rows_regions$period == 2067.5, bar_width_double, bar_width_single)) +
-    facet_wrap(~ region, scales = "free_x", ncol = 2, strip.position = "top") +
-    labs(title = NULL, x = NULL, y = NULL) +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_text(size = 5),
-      axis.text.y = element_text(size = 5),
-      strip.text.x = element_text(size = 6),
-      legend.title = element_text(size = 7),
-      legend.text = element_text(size = 6),
-      legend.position = NULL,
-    ) +
-    scale_fill_manual(
-        values = plotstyle(as.character(levels(df_rows$variable))),
-        name = NULL,
-    )
-
-    # Display subfigures plots.
-    print(scen)
-    show(subfigs_world[[scen]])
-    show(subfigs_regions[[scen]])
-  }
-```
-
-```{r}
-# Subfigure comparing regions China and India across all scenarios.
-df_rows_cha_ind <- df_plot %>%
-    filter(region %in% c("China", "India")) %>%
-    mutate(scenario=unlist(scen_shortnames)[scenario])
-df_rows_cha_ind$scenario <- factor(df_rows_cha_ind$scenario, levels = c(unlist(scen_shortnames)))
-subfig_cha_ind <- ggplot(df_rows_cha_ind, aes(x = scenario, y = value, fill = variable)) +
-    geom_bar(stat = "identity") +
-    # geom_col(width = ifelse(df_rows_regions$period == 2067.5, bar_width_double, bar_width_single)) +
-    # facet_wrap(region ~ period, scales = "free_x", nrow=2, ncol = 9, strip.position = "top") +
-    facet_grid(rows=vars(region), cols=vars(period)) +
-    labs(title = NULL, x = NULL, y = ylab) +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_text(size = 5),
-      axis.text.y = element_text(size = 5),
-      axis.title.y = element_text(size = 6),
-      strip.text.x = element_text(size = 6),
-      strip.text.y = element_text(size = 6),
-      legend.title = element_text(size = 7),
-      legend.text = element_text(size = 6),
-      legend.position = "none",
-    ) +
-    scale_fill_manual(
-        values = plotstyle(as.character(levels(df_rows$variable))),
-        name = NULL,
-        labels = c(
-            "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
-            "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
-            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage (DRI-NG-EAF-CCS)",
-            "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
-            "Primary steel using a blast furnace and a\nbasic oxygen furnace with carbon capture\nand storage (BF-BOF-CCS)",
-            "Primary steel using a blast furnace and a\nbasic oxygen furnace (BF-BOF)"
-        ),
-    )
-show(subfig_cha_ind)
-```
-
-```{r}
-# Subfigure comparing World for scenarios TwLI and FT.
-df_rows_comp_world <- df_plot %>%
-    filter(region == "World", scenario %in% c("TransitionwLockIn-PkBudg820", "FastTransition-PkBudg820")) %>%
-    mutate(scenario=unlist(scen_shortnames)[scenario])
-df_rows_comp_world$scenario <- factor(df_rows_comp_world$scenario, levels = c(unlist(scen_shortnames)))
-subfig_comp_world <- ggplot(df_rows_comp_world, aes(x = scenario, y = value, fill = variable)) +
-    geom_bar(stat = "identity") +
-    # geom_col(width = ifelse(df_rows_regions$period == 2067.5, bar_width_double, bar_width_single)) +
-    # facet_wrap(region ~ period, scales = "free_x", nrow=2, ncol = 9, strip.position = "top") +
-    facet_grid(cols=vars(period)) +
-    labs(title = NULL, x = NULL, y = ylab) +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_text(size = 5),
-      axis.text.y = element_text(size = 5),
-      axis.title.y = element_text(size = 6),
-      strip.text.x = element_text(size = 6),
-      strip.text.y = element_text(size = 6),
-      legend.title = element_text(size = 7),
-      legend.text = element_text(size = 6),
-      legend.position = "none",
-    ) +
-    scale_fill_manual(
-        values = plotstyle(as.character(levels(df_rows$variable))),
-        name = NULL,
-    )
-show(subfig_comp_world)
-```
-
-```{r}
-# Fig. 3 (old)
-fig <- ggarrange(
-    subfigs_world[["TransitionwLockIn-PkBudg820"]],
-    subfigs_regions[["TransitionwLockIn-PkBudg820"]],
-    subfigs_world[["FastTransition-PkBudg820"]],
-    subfigs_regions[["FastTransition-PkBudg820"]],
-    ncol=2,
-    nrow=2,
-    common.legend = TRUE,
-    legend="bottom"
-)
-write_images(fig, "Fig3old", height = mm(180))
-show(fig)
-```
-
-```{r}
-# Fig. 3 (Option 1)
-fig <- ggarrange(
-    subfigs_world[["TransitionwLockIn-PkBudg820"]],
-    subfigs_world[["FastTransition-PkBudg820"]],
-    subfigs_regions[["FastTransition-PkBudg820"]],
-    subfig_cha_ind,
-    ncol=2,
-    nrow=2,
-    common.legend = TRUE,
-    legend="bottom"
-)
-write_images(fig, "Fig3opt1", height = mm(180))
-show(fig)
-```
-
-```{r}
-# Fig. 3 (Option 2)
-fig <- ggarrange(
-    ggarrange(
-        subfigs_world[["FastTransition-PkBudg820"]],
-        subfigs_regions[["FastTransition-PkBudg820"]],
-        ncol=2,
-        nrow=1,
-        legend="none"
-    ),
-    subfig_cha_ind,
-    ncol=1,
-    nrow=2,
-    common.legend = TRUE,
-    legend = "bottom"
-)
-write_images(fig, "Fig3opt2", height = mm(180))
-show(fig)
-```
-
-```{r}
-# Fig. 3 (Option 2b)
-fig <- ggarrange(
-    ggarrange(
-        subfig_comp_world,
-        subfigs_regions[["FastTransition-PkBudg820"]],
-        ncol=2,
-        nrow=1,
-        legend="none"
-    ),
-    subfig_cha_ind,
-    ncol=1,
-    nrow=2,
-    common.legend = TRUE,
-    legend = "bottom"
-)
-write_images(fig, "Fig3opt2b", height = mm(180))
-show(fig)
+for (f in c("Figure3", "FigureED1")) {
+    if (f == "Figure3") {
+        df_rows <- df_plot %>% filter(region %in% regs)
+        df_rows$region <- factor(df_rows$region, levels = regs)
+    } else {
+        df_rows <- df_plot %>% filter(!region %in% regs)
+    }
+    df_rows <- df_rows %>% mutate(scenario=unlist(scen_shortnames)[scenario])
+    df_rows$scenario <- factor(df_rows$scenario, levels = c(unlist(scen_shortnames)))
+    fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
+        geom_bar(stat = "identity") +
+        facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +
+        labs(title = NULL, x = NULL, y = ylab) +
+        theme_minimal() +
+        theme(
+          axis.text.x = element_text(size = 5),
+          axis.text.y = element_text(size = 5),
+          axis.title.y = element_text(size = 6),
+          strip.text.x = element_text(size = 6),
+          strip.text.y = element_text(size = 6),
+          legend.title = element_text(size = 7),
+          legend.text = element_text(size = 6),
+          legend.position = "bottom",
+        ) +
+        scale_fill_manual(
+            values = plotstyle(as.character(levels(df_rows$variable))),
+            name = NULL,
+            labels = c(
+                "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+                "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage (DRI-NG-EAF-CCS)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+                "Primary steel using a blast furnace and a\nbasic oxygen furnace with carbon capture\nand storage (BF-BOF-CCS)",
+                "Primary steel using a blast furnace and a\nbasic oxygen furnace (BF-BOF)"
+            ),
+        )
+    write_images(fig, f, height = mm(180))
+    show(fig)
+}
 ```
