@@ -29,7 +29,7 @@ data <- raw_data %>%
   rename_all(clean_column_names) %>%
   select(-Region, -X5year_BOF_capacity_additions)
 
-# Calculate Total net existing bof capacity: historic (old) cap additions- retirement of historic plants
+# Calculate Total net existing bof capacity: historical (old) cap additions- retirement of historical plants
 # additional "Total_net_BOF_capacity_no_retirement_date" is capacity for which no dates are known (no start date, no announcement date). 
 # for there, we simulate a linear decrease in net capacity instead.
 data <- data %>%
@@ -81,11 +81,11 @@ regional_data <- raw_regional_data %>%
 
 region_labels <- c(
   "CHA" = "China",
-  "SSA" = "Sub-saharan Africa",
   "IND" = "India",
   "USAEUR" = "Global North",
   "OASLAM" = "Other Asia and Latin America",
-  "MEA" = "Middle East and North Africa"
+  "MEA" = "Middle East and North Africa",
+  "SSA" = "Sub-saharan Africa"
 )
 
 col_useur <- "#1965b0"
@@ -96,12 +96,12 @@ col_oas <- "#f7f056"
 col_mea <- "#ae76a3"
 
 fill_colors = c(
-      "China" = col_cha,
-      "Sub-saharan Africa" = col_ssa,
-      "India" = col_ind,
       "Global North" = col_useur,
+      "China" = col_cha,
+      "India" = col_ind,
       "Other Asia and Latin America" = col_oas,
-      "Middle East and North Africa" = col_mea
+      "Middle East and North Africa" = col_mea,
+      "Sub-saharan Africa" = col_ssa
 )
 
 
@@ -201,7 +201,7 @@ plot_BOF_capacity <- function(save_plot=FALSE){
     theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
     scale_x_discrete(breaks = seq(2000, 2070, by = 5)) +
     theme(legend.position = "right")
-  # print(p)
+
   if(save_plot){
     ggsave("figs/BOF_capacity_plot.png", width = 10, height = 6, dpi = 300)
   }
@@ -316,17 +316,17 @@ plot_emissions_1and2relining <- function(save_plot=FALSE){
     annotate("text", x = "2079", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF"])) / (2 * scale_factor), 
             label = "Effect of one\nBF relining\nleading to a\nplant lifetime\nof 35 years", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2) +
+              lineheight = 0.9, size = 2.9) +
     
     annotate("text", x = "2079", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_andnew"])) / (2 * scale_factor), 
             label = "Add planned\nand under\nconstruction\nBF-BOFs", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2) +
+              lineheight = 0.9, size = 2.9) +
     
     annotate("text", x = "2079", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_andnew"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_new_2relining"])) / (2 * scale_factor), 
             label = "Effect of two\nBF relinings\n(plant lifetime\nof 45 years)", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2)
+              lineheight = 0.9, size = 2.9)
   print(p)
   
   if(save_plot){
@@ -344,7 +344,8 @@ plot_emissions_1relining <- function(save_plot=FALSE){
             "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only",
             "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction",
             "index")) %>%
-    filter(index >= 2020 & index <2071)
+    filter(index >= 2020 & index <2071) %>%
+    mutate(Emissions = Emissions / 1000) # to GtCO2
 
   data_cumu_toplot <- data_long_em_cumu %>%
     filter(Category %in% c(
@@ -352,7 +353,8 @@ plot_emissions_1relining <- function(save_plot=FALSE){
                           "Cumu_oldBOF_underconstruction",
                           "Cumu_oldBOF_1relining",
                           "Cumu_oldBOF")) %>%
-    filter(index >= 2025 & index <2071)
+    filter(index >= 2025 & index <2071) %>%
+    mutate(Emissions = Emissions / 1000) # to GtCO2
 
   data_long_toplot$Category <- factor(data_long_toplot$Category, 
                               levels = c(
@@ -372,9 +374,13 @@ plot_emissions_1relining <- function(save_plot=FALSE){
                       labels = c(
                                 "Total_net_BOF_capacity_additions_new_projects_1_relining_under_construction" = "New BF-BOF project\n(under construction)",
                                 "Total_net_BOF_capacity_additions_new_projects_1_relining_announced_only" = "New BF-BOF project\n(announced)",
-                                "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity, assuming\none BF relining (lifetime of 35 years)",
-                                "Total_net_existing_BOF_capacity" = "Operating BF-BOF capacity, assuming\nplants undergo no BF relinings\nafter 2025"))+
-    labs(x = "Time period", y = "Global yearly emissions from BF-BOF steel-making (MtCO2/yr)", fill = "Bar Legend", color = "Line Legend")
+                                "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity,\nassuming one BF relining",
+                                "Total_net_existing_BOF_capacity" = "Operating BF-BOF capacity,\nassuming no further BF\nrelinings"))+
+    labs(
+      title = "Global yearly and cumulative CO2 emissions from existing and planned BF-BOF plants",
+      fill = "Bar legend",
+      x = "",
+      color = "Line legend: cumulative\nCO2 emissions from 2025")
 
   scale_factor <- 22
 
@@ -388,41 +394,40 @@ plot_emissions_1relining <- function(save_plot=FALSE){
         "Cumu_oldBOF" = "#454444"
       ),
       labels = c(
-        "Cumu_oldBOF_underconstruction"="Cumulative CO2 emissions from 2025,\nfrom operating and under construction\nBF-BOFs, if one relining takes place",
-        "Cumu_oldBOF_1relining" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if one\nBF relining takes place",
-        "Cumu_oldBOF_andnew" = "Cumulative CO2 emissions from 2025,\nfrom operating, under construction and\nannounced BF-BOFs, if one BF relining\ntakes place",
-        "Cumu_oldBOF" = "Cumulative CO2 emissions from 2025,\nfrom operating BF-BOFs, if no new\nrelinings take place after 2025"
+        "Cumu_oldBOF_underconstruction"="From operating and\nunder construction BF-BOFs,\nif one BF relining takes place",
+        "Cumu_oldBOF_1relining" = "From operating BF-BOFs,\nif one BF relining takes place",
+        "Cumu_oldBOF_andnew" = "From operating, under\nconstruction and announced\nBF-BOFs, if one BF relining\ntakes place",
+        "Cumu_oldBOF" = "From operating BF-BOFs,\nif no new relinings\ntake place"
       )
     ) +
-      scale_y_continuous( limits = c(0, 3100),
-      name = "Global yearly emissions from BF-BOF steel-making\n(MtCO2/yr), barplot",
-      sec.axis = sec_axis(~ . * scale_factor, name = "Cumulative CO2 Emissions from 2025,\nfrom BF-BOF steel-making (MtCO2, line plots)")
+      scale_y_continuous( limits = c(0, 3.1),
+      name = "Yearly emissions (Gt CO2/year, bar plot)",
+      sec.axis = sec_axis(~ . * scale_factor, name = "Cumulative emissions from 2025 (Gt CO2, line plots)")
     ) +
-    labs(caption = "*BF-BOF is used as a general term; however, a small subset of included BOF facilities operate\nwithout a BF or rely on alternative iron production methods."
+    labs(caption = "*BF-BOF is used as a general term; however, a small subset of included BOF\nfacilities operate without a BF or rely on alternative iron production methods."
           ) +
     # labs(color = "Line Legend") +
     scale_x_discrete(breaks = x_breaks) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
-      text = element_text(size = 12),
-      axis.title = element_text(size = 13),
-      axis.text = element_text(size = 11),
-      legend.title = element_text(size = 13),
-      legend.text = element_text(size = 10),
+      text = element_text(size = 9),
+      axis.title = element_text(size = 10),
+      axis.text = element_text(size = 9),
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 7),
 
-      legend.key.height = unit(1.7, "cm"),
-      legend.key.width = unit(0.7, "cm"),
-      legend.spacing.y = unit(1.6, "cm"),
-      legend.margin = margin(8, 8, 8, 8)) +
+      legend.key.height = unit(1.3, "cm"),
+      legend.key.width = unit(0.6, "cm"),
+      legend.spacing.y = unit(0.5, "cm")) +
     guides(
       fill = guide_legend(
         byrow = TRUE,
-        title = "Bar Legend",
-        keyheight = unit(1.4, "cm"),
+        # title = "Bar legend",
+        keyheight = unit(0.9, "cm"),
         ),
       group = guide_legend(
         byrow = TRUE,
-        title = "Line Legend",
-        keyheight = unit(2, "cm"),
+        # title = "Line legend",
+        keyheight = unit(0.8, "cm"),
         )
       )
   #add annotations and arrows
@@ -430,40 +435,42 @@ plot_emissions_1relining <- function(save_plot=FALSE){
     geom_segment(aes(
       x = "2069", xend = "2069",
       y = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF"]) / scale_factor, 
-      yend = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) / scale_factor
-    ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
+      yend = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) / scale_factor) - 0.02
+    ), arrow = arrow(length = unit(0.3, "cm")), color = "black") +
     
     geom_segment(aes(
       x = "2069", xend = "2069",
       y = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) / scale_factor, 
-      yend = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_underconstruction"]) / scale_factor
-    ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
+      yend = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_underconstruction"]) / scale_factor)- 0.02
+    ), arrow = arrow(length = unit(0.3, "cm")), color = "black") +
 
     geom_segment(aes(
       x = "2069", xend = "2069",
       y = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_underconstruction"]) / scale_factor, 
-      yend = max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_andnew"]) / scale_factor
-    ), arrow = arrow(length = unit(0.4, "cm")), color = "black") +
+      yend = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_andnew"]) / scale_factor) - 0.02
+    ), arrow = arrow(length = unit(0.3, "cm")), color = "black") +
     
+    annotate("text", x = "2069", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF"])) / (1.1 * scale_factor), 
+            label = "Existing plants\n(no further BF relinings)", hjust = 1,
+              lineheight = 0.9, size = 2.9) +
+
     annotate("text", x = "2069", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF"])) / (2 * scale_factor), 
             label = "Reline existing\nBFs (plant lifetime\nof 35 years)", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2) +
+              lineheight = 0.9, size = 2.9) +
     
     annotate("text", x = "2069", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_1relining"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_underconstruction"])) / (2 * scale_factor), 
-            label = "Add BF-BOFs\nunder construction", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2) +
+            label = "Add BF-BOFs\nunder construction", hjust = 1.1,vjust = 0.5,
+              lineheight = 0.9, size = 2.9) +
     
     annotate("text", x = "2069", y = (max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_underconstruction"]) + 
                                   max(data_cumu_toplot$Emissions[data_cumu_toplot$Category == "Cumu_oldBOF_andnew"])) / (2 * scale_factor), 
             label = "Add planned\nBF-BOFs", hjust = 1.2,vjust = 0.4,
-              lineheight = 0.9, size = 3.2) 
-            
-  print(p)
+              lineheight = 0.9, size = 2.9)
 
   if(save_plot){
-    ggsave("figs/BOF_emissions_plot_1relining.png", width = 11, height = 8, dpi = 300)
+    ggsave("figs/BOF_emissions_plot_1relining.png", width = 180, height = 140, units = "mm", dpi = 300)
   }
 }
 
@@ -511,25 +518,20 @@ plot_regional_production <- function(save_plot=FALSE){
     summarise(value = sum(value, na.rm = TRUE)) %>%
     ungroup()
 
-  p <- ggplot(data = df_plot_production,
+  p <-  ggplot(data = df_plot_production,
               aes(x = Historic_Time, y = value, fill = Region)) +
     geom_area(alpha = 1) +
     scale_fill_manual(
       values = fill_colors,
       breaks = names(fill_colors),
       guide = guide_legend(
-        # override.aes = list(
-        #   fill = c(NA, # for "First wave:" no fill
-        #     col_useur, col_cha, col_ind, col_oas, col_ssa
-        #   ),
-        #   alpha = c(0, 0.7, 0.7, 0.7, 0.7, 0.7)
-        # )
       )) +
     # geom_rect(aes(xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf), fill = "#6a6a6951", alpha = 0.15) +
     annotate("rect", xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf, fill = "#6a6a6951", alpha = 0.15) +
     scale_x_continuous(breaks = seq(1900, 2050, by = 25)) +
     theme_bw(base_size = 8) +
-    labs(title = "Regional historical primary steel production\n",
+    labs(title = "Primary steel production",
+        subtitle = "(historical and scenario data)",
         # x = "Year",
         y = "Primary steel production (Mt/yr)",
         colour = "Region") +
@@ -548,11 +550,11 @@ plot_regional_production <- function(save_plot=FALSE){
       color = col_useur, show.legend = FALSE) +
     annotate("rect", 
             xmin= 1904, xmax=1950,
-            ymin=200, ymax=370,
+            ymin=200, ymax=430,
             alpha=0.4, color = col_useur, fill = "white") +
     annotate("text", x = 1940,
         y = 250,
-        label ="1st wave:\nGlobal North, post WW2",
+        label ="1st wave:\nGlobal North, \npost WW2",
           hjust = 0.8, vjust = 0.1,
           lineheight = 0.9, size = 2.1) +
     #CHA
@@ -576,36 +578,36 @@ plot_regional_production <- function(save_plot=FALSE){
       color = col_ind, show.legend = FALSE) +
     annotate("rect", 
             xmin= 1957, xmax=2005,
-            ymin=970, ymax=1210,
+            ymin=950, ymax=1260,
             alpha=0.4, color = col_ind, fill = "white") +
     annotate("text", x = 2000,
         y = 970,
-        label ="3rd wave:\nIndia, other Asia,\nLatin America, from today",
+        label ="3rd wave:\nIndia, other Asia,\nLatin America,\nfrom today",
           hjust = 0.9, vjust = -0.2,
           lineheight = 0.9, size = 2.1) +
     #SSA
     geom_segment(aes(
-      x = 2007, xend = 2049, y = 1300, yend = 100), 
+      x = 2007, xend = 2049, y = 1400, yend = 100), 
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_ssa, show.legend = FALSE) +
     annotate("rect", 
             xmin= 1962, xmax=2007,
-            ymin=1240, ymax=1380,
+            ymin=1340, ymax=1580,
             alpha=0.4, color = col_ssa, fill = "white") +
     annotate("text", x = 2002,
-        y = 1250,
-        label ="4th wave:\nSSA, near future",
+        y = 1360,
+        label ="4th wave:\nSub-Saharan\nAfrica, near future",
           hjust = 0.9, vjust = -0.1,
           lineheight = 0.9, size = 2.1) +
     geom_vline(xintercept = 2022, linetype = "solid", size = 0.4 , color = "#565555") +
-    ylim(0, 1950) +
+    ylim(0, 1960) +
     annotate("rect", 
             xmin= 2014, xmax=2020,
-            ymin=1570, ymax=1950,
+            ymin=1550, ymax=1960,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
     annotate("text", x = 2017,
         y = 1750,
-        label ="Historic data",
+        label ="Historical data",
         color = "grey50",
         lineheight = 0.9, size = 2.1, angle = 90)+
     annotate("rect", 
@@ -618,15 +620,15 @@ plot_regional_production <- function(save_plot=FALSE){
         color = "grey50",
         lineheight = 0.9, size = 2.1, angle = 90) +
     #add circle annotations (1/2/3/4)
-    annotate("point", x = 1904, y = 370, shape = 21, size = 5, fill = "white", color = col_useur) +
+    annotate("point", x = 1904, y = 430, shape = 21, size = 5, fill = "white", color = col_useur) +
     annotate("point", x = 1958, y = 740, shape = 21, size = 5, fill = "white", color = col_cha) +
-    annotate("point", x = 1957, y = 1190, shape = 21, size = 5, fill = "white", color = col_ind) +
-    annotate("point", x = 1962, y = 1380, shape = 21, size = 5, fill = "white", color = col_ssa) +
+    annotate("point", x = 1957, y = 1240, shape = 21, size = 5, fill = "white", color = col_ind) +
+    annotate("point", x = 1962, y = 1580, shape = 21, size = 5, fill = "white", color = col_ssa) +
     #add labels for circles
-    annotate("text", x = 1904, y = 365, label = "1", color = col_useur, size = 3) +
+    annotate("text", x = 1904, y = 445, label = "1", color = col_useur, size = 3) +
     annotate("text", x = 1958, y = 735, label = "2", color = col_cha, size = 3) +
-    annotate("text", x = 1957, y = 1185, label = "3", color = col_ind, size = 3) +
-    annotate("text", x = 1962, y = 1375, label = "4", color = col_ssa, size = 3)
+    annotate("text", x = 1957, y = 1235, label = "3", color = col_ind, size = 3) +
+    annotate("text", x = 1962, y = 1575, label = "4", color = col_ssa, size = 3)
 
   if(save_plot){
     ggsave("figs/BOF_regional_production_plot_wprojections.png", p, width = 8, height = 6, dpi = 300)
@@ -690,29 +692,29 @@ plot_capacity_additions <- function(save_plot=FALSE){
   df_plot_capacity <- df_plot_capacity %>%
     mutate(bin_year = bin_years[(Year - (start_year - bins))/bins]) %>%
     group_by(name, Region, bin_year) %>%
-    summarise(value = sum(value)) %>%
+    summarise(value = sum(value)/bins) %>%
     ungroup()
-
-  # print(df_plot_capacity %>% filter(Region == "India", bin_year > 2020))
 
 
   #label years after 2025
   df_plot_capacity <- df_plot_capacity %>%
-    mutate(segment = ifelse(bin_year >= 2025, "New announcements", "Historic capacity"))
+    mutate(segment = ifelse(bin_year >= 2025, "New announcements", "Historical capacity"))
+
+  # print(unique(df_plot_capacity$Region))
 
   p <- ggplot() +
     geom_bar(data=df_plot_capacity,
               aes(x=bin_year, y=value, fill=Region),
               position = "stack", 
             stat="identity") +
-    # scale_linetype_manual(values = c("Historic capacity" = "solid", "New announcements" = "22")) +
+    # scale_linetype_manual(values = c("Historical capacity" = "solid", "New announcements" = "22")) +
     scale_fill_manual(
       values = fill_colors,
       breaks = names(fill_colors)) +
     theme_bw(base_size = 8) +
   labs(
-    # title = "Regional BF-BOF capacity additions\n(historical, new announcements as of June 2025\nand scenario data)",
-        title = "Regional BF-BOF capacity additions\n(new announcements as of June 2025)",
+        title = "BF-BOF capacity additions",
+        subtitle = "(historical and new announcements as of\nJune 2025)",
         # x = "Year",
         y = "BF-BOF capacity additions (Mtpa)",
         fill = "Region") +
@@ -728,22 +730,20 @@ plot_capacity_additions <- function(save_plot=FALSE){
     geom_rect(aes(xmin = start_year, xmax = 2025, ymin = 0, ymax = Inf), fill = "#6a6a6951", alpha = 0.15) +
     annotate("rect", 
             xmin= 2015, xmax=2022,
-            ymin=260, ymax=340,
-            # ymin=130, ymax=170,
+            ymin=130, ymax=170,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
     annotate("text", x = 2018,
-        y = 300, #150
-        label ="Historic data",
+        y = 150,
+        label ="Historical data",
         color = "grey50",
         lineheight = 0.9, size = 2.1, angle = 90)+
     annotate("rect", 
             xmin= 2028, xmax=2036,
-            ymin=235, ymax=360,
-            # ymin=115, ymax=180,
+            ymin=130, ymax=170,
             alpha=1, color = "#8d8989", fill = "#ffffff") +
     annotate("text", x = 2032,
-        y = 300,#150,
-        label ="New announcements",
+        y = 150,
+        label ="Announced",
         color = "grey50",
         lineheight = 0.9, size = 2.1, angle = 90)
 
@@ -761,7 +761,7 @@ plot_combine_production_and_cap_additions <- function(save_plot=FALSE){
                             ncol = 2, nrow = 1,
                             widths = c(1.2, 1),
                             labels = c("a", "b"),
-                            common.legend = TRUE, legend = "bottom",
+                            common.legend = TRUE, legend = "right",
                             align = "v")
   # print(combined_plot)
   if(save_plot){
@@ -980,12 +980,12 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
 
   #label years after 2025
   df_plot_capacity <- df_plot_capacity %>%
-    mutate(segment = ifelse(Year < 2025, "Historic capacity", ifelse(Year < 2032,"New announcements","Scenario data")))
+    mutate(segment = ifelse(Year < 2025, "Historical capacity", ifelse(Year < 2032,"New announcements","Scenario data")))
 
   p <- ggplot() +
     geom_line(data=df_plot_capacity,
               aes(x=Year, y=value, colour=Region,linetype = segment), size = 1) +
-    scale_linetype_manual(values = c("Historic capacity" = "solid", "New announcements" = "111111", "Scenario data" = "1343")) +
+    scale_linetype_manual(values = c("Historical capacity" = "solid", "New announcements" = "111111", "Scenario data" = "1343")) +
     scale_color_manual(
       values = fill_colors,
       breaks = names(fill_colors)) +
@@ -1014,7 +1014,7 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
             alpha=1, color = "#8d8989", fill = "#ffffff") +
     annotate("text", x = 2005,
         y = 1320,
-        label ="Historic\ndata",
+        label ="Historical\ndata",
           lineheight = 0.9, size = 2.5)+
     annotate("rect", 
             xmin= 2030, xmax=2070,

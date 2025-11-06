@@ -17,9 +17,9 @@ component_order <- c("Fossil gas and biogas\n(excluding hydrogen)",
                     "Electrolysis",
                     "Solar PV (other steel-\nrelated demand)",
                     "EAF (secondary)",
-                    "DRI CCS retrofit",
+                    "DRI CC retrofit",
                     "DRI-EAF",
-                    "BF CCS retrofit",
+                    "BF CC retrofit",
                     "BF-BOF")
 
 region_names  <- tribble(
@@ -39,9 +39,9 @@ scen_order <- c( "Current policies", "Transition with lock-in", "Fast transition
 #   "Electrolysis" = "#0f5e0f",
 #   "EAF (secondary)" = "#1edf3e",
 #   "DRI-EAF" = "#0aacdd",
-#   "DRI CCS retrofit" = "#7ea151",
+#   "DRI CC retrofit" = "#7ea151",
 #   "BF-BOF" = "#323232",
-#   "BF CCS retrofit" = "#747373",
+#   "BF CC retrofit" = "#747373",
 #   "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
 #   "Coal and biomass solids" = "#7b3e0253"
 # )
@@ -52,9 +52,9 @@ component_colors <- c(
   "Electrolysis" = "#ffaabb",
   "EAF (secondary)" = "#44bb99",
   "DRI-EAF" = "#99ddff",
-  "DRI CCS retrofit" = "#77aadd",
+  "DRI CC retrofit" = "#77aadd",
   "BF-BOF" = "#323232",
-  "BF CCS retrofit" = "#747373",
+  "BF CC retrofit" = "#747373",
   "Fossil gas and biogas\n(excluding hydrogen)" = "#0d4e8f7b", 
   "Coal and biomass solids" = "#7b3e0253"
 )
@@ -289,7 +289,9 @@ calc_total_investments <- function(gdx) {
   # (eg. whether an eaf is for primary or secondary steel)
   # since we want to calculate the capacity additions for each mode,
   # we derive capacity additions from the production (outflowPrc) and the capacity factor,
-  # ONLY for primary eafs. We then subtract these from the total eaf capacity additions
+  # ONLY for primary eafs (these are scaling up from 2020, so we can calculate this reliably until ~2045,
+  # when the plants start retiring).
+  # We then subtract these from the total eaf capacity additions
   df.deltacap_eaf <- calculate_required_deltacap(df.outflowPrc_eaf, df.capfac_steel %>% filter(all_te == "eaf") %>% select(-all_te)) %>%
     # add columns to be consistent with the other deltacap df
     mutate(all_te = "eaf", opmoPrc = "PRI")
@@ -303,8 +305,8 @@ calc_total_investments <- function(gdx) {
       all_te == "eaf" & opmoPrc == "sec" ~ "EAF (secondary)",
       all_te == "eaf" & opmoPrc == "PRI" ~ "DRI-EAF",
       all_te == "idr" ~ "DRI-EAF",
-      all_te == "bfcc" ~ "BF CCS retrofit",
-      all_te == "idrcc" ~ "DRI CCS retrofit",
+      all_te == "bfcc" ~ "BF CC retrofit",
+      all_te == "idrcc" ~ "DRI CC retrofit",
       all_te == "bf" | all_te == "bof" ~ "BF-BOF",
       TRUE ~ NA_character_
     )) %>%
@@ -771,7 +773,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
         " annual steel sector investments"),
       subtitle = "(including supply side investments such as solar PV and electrolysis)\n",
       x = "Scenario and year",
-      y = "Annual investments\n(Bill. USD p. a.)",
+      y = "Annual investments\n(Bill. USD/year)",
       fill = "CAPEX"
     ) +
     guides(fill = guide_legend(ncol = 1)) +
@@ -802,7 +804,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
         " average annual\nsteel sector investments"),
       subtitle = "(2030-2045)",
       x = "Scenario",
-      y = "Annual investments\n(Bill. USD p. a.)"
+      y = "Annual investments\n(Bill. USD/year)"
     ) +
     scale_y_continuous(
       limits = c(0, max_y),

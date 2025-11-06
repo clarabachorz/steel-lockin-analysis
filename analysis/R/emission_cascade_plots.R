@@ -325,6 +325,9 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
     setNames(region_order, paste0(names(region_order), "_2"))
   )
 
+  region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
+                        unlist(region_groups))
+                        
   mainscens_df_emi_notcumu <- miflist %>%
     map_dfr(calc_em)
 

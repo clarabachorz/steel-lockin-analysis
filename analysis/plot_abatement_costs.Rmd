@@ -1,11 +1,23 @@
-```{R setup, include=FALSE}
+```{r install packages, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE)
 
 path <- "C:/Users/claraba/Documents/PhD_work/Papers/SteelREMIND/Analysis/analysis"
 knitr::opts_knit$set(
     root.dir = path
     )
+    
+required_packages <- c("ggpubr", "ggplot2", "quitte", "tidyverse", "mrremind", "magclass", "waterfalls", "dplyr", "gridExtra", "grid", "purrr")
 
+for (pkg in required_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+```
+
+## Load source R files for analysis and plotting
+```{R setup, include=FALSE}
 #load functions
 source("./analysis/R/plant_level_data_analysis.R")
 source("./analysis/R/lco_analysis.R")
@@ -13,38 +25,65 @@ source("./analysis/R/abatement_costs.R")
 source("./analysis/R/investment_costs.R")
 source("./analysis/R/emission_cascade_plots.R")
 
-
 ```
+## Create figs folder if it does not exist
+```{r check figs folder, include=FALSE}
+if (!dir.exists("./figs")) {
+  dir.create("./figs", recursive = TRUE)
+}
+```
+## Define the scenarios and key parameters
 ```{R enter parameters}
+# define scenarios to compare.
+# each scenario is a list with:
+# 1) the scenario name
+# 2) and 3): REMIND scenario output: the gdx file (unprocessed) and the mif file (processed gdx file)
+# 4) the average levelized cost of steel (calculated with lco_analysis.R using the gdx file)
+
 scenario0 <- list(
-  name = "NPi",
-  lcop_file = "./inputdata/other/lcop_avg_npi.csv",
+  name = "Current policies",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif",
-  gdx = "inputdata/gdx/TransitionwLockIn-NPi.gdx"
+  gdx = "inputdata/gdx/TransitionwLockIn-NPi.gdx",
+  lcop_file = "./inputdata/other/lcop_avg_npi.csv"
 )
 scenario1 <- list(
   name = "Transition with lock-in",
-  lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in.csv",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif",
-  gdx = "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx"
+  gdx = "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx",
+  lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in.csv"
 )
 scenario2 <- list(
   name = "Fast transition",
-  lcop_file = "./inputdata/other/lcop_avg_fast_transition.csv",
   mif_file = "inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif",
-  gdx = "inputdata/gdx/FastTransition-PkBudg820.gdx"
+  gdx = "inputdata/gdx/FastTransition-PkBudg820.gdx",
+  lcop_file = "./inputdata/other/lcop_avg_fast_transition.csv"
+)
+scenario3 <- list(
+  name = "Transition with lock-in 650",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg650.mif",
+  gdx = "inputdata/gdx/TransitionwLockIn-PkBudg650.gdx",
+  lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in_650.csv"
 )
 
+scenarios <- list(scenario0, scenario1, scenario2)
+scenarios_for_lcop <- list(scenario0, scenario1, scenario2, scenario3)
+# for the abatement figures: select which regions to aggregate. 
+# Default: other asia + latin america,
+# and global north countries.
 region_to_aggr <- list(
   "OASLAM" = c("OAS", "LAM"),
   "EUR+NEU+USA+JPN+REF+CAZ" = c("EUR", "USA", "CAZ", "NEU", "REF", "JPN")
 )
+
+### key input parameters: what period to consider when calculating cumulative emissions and costs
+### and what discount rate to use.
 start_date <- 2025
 end_date <- 2070
 discount_rate <- 0.05
-scenarios <- list(scenario0, scenario1, scenario2)
 ```
-
+## Run Python script to calculate historical and future BOF capacity additions from GEM data
+This is used to generate the files in the folder ./inputdata/gem, which are used to plot Figures 1 and 2. 
+This cell does not need to be ran, unless changes have been made to eg. relining cycle time assumptions (defined in main()). 
 ```{R run python}
 # install python dependencies if not done already
 if (!file.exists("analysis/python/.venv")) {
@@ -54,40 +93,34 @@ if (!file.exists("analysis/python/.venv")) {
 
 # run python script to calculate BOF capacity from GEM data
 # the input data can be found in inputdata/python_source, and is the March 2025 version.
-# this is used to plot the plant level data in the next chunk
 system("poetry -C analysis/python run python analysis/python/run_bof_capacity_calculation.py")
 
 ```
-
-```{R plot plant level data}
-# plot regional production data (historical and scenario data)
-plot_regional_production(save_plot = TRUE)
-
-# plot capacity additions (historical and recent announcements)
-plot_capacity_additions(save_plot = TRUE)
-
-# plot steel-lock in figure, based on the assumption of 1 relining (15+20 year lifetime)
-plot_emissions_1relining(save_plot = TRUE)
-
-```
-
+## Calculate average levelized cost of steel (LCOP)
+This cell does not need to be ran unless the gdx/mif files for the scenarios have been changed.
+Here, we calculate the levelized cost of steel. The result can be displayed in two ways:
+1. Show the average LCO for each steel production route, for a given year and region. "Average" means the average LCO over the
+plant lifetime. Eg. the average LCO for a BF-BOF plant that is built in 2030 in India = the average LCO over 2030-2065 (assuming a 35 year lifetime).
+2. Show the weighted LCO for all steel produced in a given year and region. 
+"Weighted" means that the individual LCOs for each production pathway (BF-BOF, H2-DRI-EAF ...)
+are weighted by their yearly production to reach a weighted average LCO for each year and region.
+This is the metric that is used to calculate average abatement costs (see abatement_costs.R).
 ```{R calc and plot LCO}
-# Calculat the levelized cost of steel for all scenarios.
-# This is then used for the abatement cost calculation
+# calculates the levelized cost of steel for all scenarios.
+# this is then used for the abatement cost calculation
 # (saved under the filenames lcop_avg_*)
 
-for (scen in scenarios){
+for (scen in scenarios_for_lcop){
   # calculate and plot average LCO
-  # used mostly for debugging
   p_avg <- plot_average_lcop(
     gdx = scen$gdx,
     fs = 10,
     save_plot = TRUE,
     scenario_name = scen$name
   )
+
   # calculate and plot weighted LCO 
   # (and save the data, which is used for the abatement cost calculation)
-
   p_weighted <- plot_weighted_lcop(
     gdx = scen$gdx,
     fs = 10,
@@ -96,13 +129,29 @@ for (scen in scenarios){
     scenario_name = scen$name
   )
   ## uncomment to print the plots while running the script
-  # print(p_avg)
+  print(p_avg)
   # print(p_weighted)
 }
 
 ```
+## Plot Figures 1 and 2
+Plot the processed GEM data to get Figure 1 (primary steel production + capacity additions) and Figure 2 
+(estimating the steel fossil lock-in).
+```{R plot plant level data}
+# plot regional production data (historical and scenario data) and
+# capacity additions (historical and recent announcements)
+plot_combine_production_and_cap_additions(save_plot = TRUE)
 
-```{R plot abatement costs}
+# # plot steel-lock in figure, based on the assumption of 1 relining (15+20 year lifetime)
+plot_emissions_1relining(save_plot = TRUE)
+
+```
+# Get average abatement costs
+Plot the average abatement costs calculated for different scenario pairs.
+The average abatement cost is a single metric, which yield the average CO2 price required over a certain time period
+(here: 2025-2070) to reach cost parity between two scenarios. This is **not** a marginal abatement cost.
+The average abatement costs calculated are later added to Figure 4 (emission cascade plot)
+```{R plot average abatement costs}
 
 run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate) {
   ## "scen1" should be the lower ambition scenario
@@ -144,11 +193,20 @@ df_plot2 <- run_and_save_abatement_cost_plot(scenario1, scenario2, region_to_agg
 ##### (scen 0 -> scen 1 and scen1 -> scen 2 are the relevant ones here)
 #### used later for the cascade plot
 df_aac_combined <- rbind(df_plot1, df_plot2) %>% select(fscp, region, scenario1, scenario2)
-
-
-df <- run_abatement_andCO2price_comparison(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
-ggsave("./figs/scenario_cost_vs_co2_value.png", df$plot, width = 6, height = 6)
 ```
+
+## Plot scenario costs vs CO2 value
+Plot Figure 3b., which shows the total additional cost of the Fast Transition scenario compared to
+Transition with Lock-in scenario (over a defined period and discount rate). This is compared to the value of the additional
+CO2 abated (calculated using CO2 price * emission reduction between the two scenarios). 
+```{R plot abatement costs vs CO2 value}
+
+df <- run_scenario_cost_andCO2value_comparison(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
+p_scenariocost_vs_co2value <- df$plot
+```
+## Plot emission cascade plots
+Plot Figure 3: combine the cumulated emission cascade plot with the scenario costs vs CO2 value plot.
+Add the average abatement cost information to the cascade (df_aac_combined).
 ```{R plot cumulative emissions cascade}
 # Fig3. Emission cascade plots
 #create list of scenarios with mif data
@@ -158,27 +216,41 @@ mif_list <- lapply(scenarios, function(scen) {
   mif
 })
 
-## plot cascade plots: cumulative
-# plot_cascade_cumuem(mif_list, df_aac_combined)
-plot_cascade_cumuem(mif_list, df_aac_combined, show_aac_annotations = TRUE)
+## plot cascade plots: cumulative emissions (combined with abatement costs and co2 value plot)
+combine_cascade_cumueum_and_co2value_plot(mif_list, df_aac_combined, p_scenariocost_vs_co2value, show_aac_annotations = TRUE)
 
 ## plot cascade plots: yearly
 # plot_cascade_yearlyem(mif_list, year_to_plot= 2050)
+# plot_cascade_yearlyem(mif_list, year_to_plot= 2060)
+# plot_cascade_yearlyem(mif_list, year_to_plot= 2070)
+
 ```
+## Calculate and plot investments required in the different scenarios
+Plots Figure 5, which shows the total investments required in the different scenarios.
 ```{R calc investment costs}
 ## calculate total investment costs for all scenarios and regions
 df.totalcosts <- combine_investment_costs(scenarios)
 
-## we cannot take an average up to 2070, as the calculation does not take into account
-## retirement and is only valid for the short term (up to 2045)
-final_year_avg_invst = 2045
+# plot investment costs for India
+plot_invst_costs_v2(df.totalcosts, region_to_plot = "IND", save_plot = TRUE)
 
-plot_invst_costs(df.totalcosts, region_to_plot = "IND", save_plot = TRUE)
+```
 
-#plot_invst_costs(df.totalcosts, region_to_plot = "Global")
 
-# plot_avg_invst_capex(df.totalcosts, final_year_avg_invst, discount_rate = discount_rate, region_to_plot = "IND", save_plot = TRUE)
+```{R plot extended and supplementary figures}
+source("./analysis/R/supp_and_ext_plots.R")
 
-#plot_avg_invst_fossil(df.totalcosts, final_year_avg_invst, discount_rate = discount_rate, region_to_plot = "IND", save_plot = FALSE)
 
+#create list of gdx files
+gdx_list <- list()
+gdx_list$gdx <- lapply(scenarios, function(scen) {
+  scen$gdx
+})
+gdx_list$name <- lapply(scenarios, function(scen) {
+  scen$name
+})
+
+# Ext. Fig. ?: REMIND steel capacity additions by region and technology
+plot_REMIND_steel_cap_add(gdx_list)
+# Supp. Fig. ?:
 ```

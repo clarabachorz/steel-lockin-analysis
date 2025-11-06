@@ -517,22 +517,20 @@ run_scenario_cost_andCO2value_comparison <- function(scen1, scen2, region_to_agg
                 ) +
             labs(
                 title = paste0(
-                    "The value of abating additional CO2 in ",
+                    "Additional steel system costs of ",
                     scen2_name,
-                    " compared\nto ",
-                    scen1_name, 
-                    " (discount rate: ", discount_rate * 100, "%)."),
+                    " versus cost\nof equivalent mitigation in other energy sectors"),
                 # title = bquote(
                 #             atop("The value of abating additional CO"[2]~"in"~italic(.(scen2_name))~"  ",
                 #             "compared to"~italic(.(scen1_name))~"(discount rate:"~.(discount_rate * 100)~"%)")),
-                x = "Region",
-                y = "Value and costs\n(bill. USD)",
+                x = "",
+                y = "Costs (bill. USD)",
                 pattern = "Cost type"
             ) +
             theme_bw(base_size = 10) +
             scale_pattern_manual(
                 values = c("cost_diff" = "none", "value_em" = "stripe"),
-                labels = c("cost_diff" = "Scenario cost difference", "value_em" = "Value of avoided CO2 emissions"),
+                labels = c("cost_diff" = "Steel sector additional costs", "value_em" = "Equivalent mitigation\nin other sectors"),
             ) +
             scale_fill_manual(values = c(
                 "China" = "#dc050c",
