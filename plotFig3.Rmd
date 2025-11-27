@@ -154,6 +154,7 @@ bar_width_single <- 5 - bar_spacing
 bar_width_double <- 10 - bar_spacing
 
 scen_names <- list(
+    "TransitionwLockIn-NPi" = "Current Policies",
     "TransitionwLockIn-PkBudg820" = "Extended lock-in",
     "FastTransition-PkBudg820" = "Fast transition"
 )
@@ -187,9 +188,26 @@ for (f in c("Figure3", "FigureED1")) {
     }
     df_rows <- df_rows %>% mutate(scenario=unlist(scen_shortnames)[scenario])
     df_rows$scenario <- factor(df_rows$scenario, levels = c(unlist(scen_shortnames)))
+
+    # add panel letters
+    panel_keys <- df_rows %>%
+        group_by(region) %>%
+        summarise(period = min(as.numeric(period)), .groups = "drop") %>%
+        arrange(region) %>%
+        mutate(panel_label = letters[seq_len(n())], "")
+  
     fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
         geom_bar(stat = "identity") +
         facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +
+        #uncomment to add panel keys
+        geom_text(
+          data = panel_keys,
+          mapping = aes(x = -Inf, y = Inf, label = panel_label),
+          inherit.aes = FALSE,
+          hjust = 7, vjust = -0.2,
+          size = 4.5, fontface = "bold",
+          colour = "black"
+        ) +
         labs(title = NULL, x = NULL, y = ylab) +
         theme_minimal() +
         theme(
@@ -202,7 +220,9 @@ for (f in c("Figure3", "FigureED1")) {
           legend.text = element_text(size = 7),
           legend.position = "bottom",
           legend.key.height = unit(10, "mm"),
+          plot.margin = margin(10, 10, 10, 25)
         ) +
+        coord_cartesian(clip = "off") +
         scale_fill_manual(
             values = custom_colors,
             name = NULL,
@@ -218,4 +238,43 @@ for (f in c("Figure3", "FigureED1")) {
     write_images(fig, f, height = mm(180))
     show(fig)
 }
+```
+
+```{r area-world-three-scenarios, echo=FALSE}
+# stacked area plot for World, for the three scenarios
+world_df <- df_plot %>%
+  filter(region == "World", scenario %in% names(scen_names)) %>%
+  mutate(
+    scenario_short = unlist(scen_names)[scenario],
+    scenario_short = factor(scenario_short, levels = unlist(scen_names))
+  )
+
+area_world <- ggplot(world_df, aes(x = period, y = value, fill = variable, group = variable)) +
+  geom_area(position = "stack", colour = NA) +
+  facet_wrap(~ scenario_short, nrow = 1) +
+  scale_fill_manual(
+    values = custom_colors,
+    name = NULL,
+    labels = c(
+                "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+                "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage\n(DRI-NG-EAF-CCS)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+                "Primary steel using a blast furnace and\na basic oxygen furnace with carbon\ncapture and storage (BF-BOF-CCS)",
+                "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF)"
+            ),
+            ) +
+  scale_x_continuous(breaks = seq(2025,2070,5)) +
+  labs(title = "Global steel production",
+       x = NULL, y = ylab) +
+  theme_minimal(base_size = 9) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(size = 7, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 7),
+    strip.text = element_text(size = 9)
+  )
+
+write_images(area_world, "FigureED2", width = mm(180), height = mm(100))
+show(area_world)
 ```
