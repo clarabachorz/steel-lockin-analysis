@@ -27,8 +27,10 @@ prepare_lcop_df <- function(df) {
         filter(!component == "Emission Cost") %>%
         filter(between(period, 2025, 2075)) %>%
         select(-color)
+        # %>%
+        # mutate(value = ifelse(route == "DRI-EAF H2", ifelse(component == "Hydrogen", 0, value), value)) %>%
+        # mutate(value = ifelse(component == "Electricity", 0, value))
 }
-
 
 #' Calculate total (average) LCOP by region and period
 #'
@@ -517,9 +519,10 @@ run_scenario_cost_andCO2value_comparison <- function(scen1, scen2, region_to_agg
                 ) +
             labs(
                 title = paste0(
-                    "Additional steel system costs of ",
+                    "Economic benefit of ",
                     scen2_name,
-                    " versus cost\nof equivalent mitigation in other energy sectors"),
+                    " versus ",
+                    scen1_name),
                 # title = bquote(
                 #             atop("The value of abating additional CO"[2]~"in"~italic(.(scen2_name))~"  ",
                 #             "compared to"~italic(.(scen1_name))~"(discount rate:"~.(discount_rate * 100)~"%)")),

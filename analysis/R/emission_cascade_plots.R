@@ -229,7 +229,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
             fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
     # scale_x_discrete(labels = label_fun)+
     labs(
-      title = "Breakdown of cumulative CO2 Emissions from steel production\n(2025 to 2070)",
+      title = "Breakdown of cumulative CO2 Emissions from steel production\n(2025 to 2070) and average abatement costs",
       x = "Scenario",
       y = "Cumulative emissions\n(Gt CO2)",
       fill = "Region"
@@ -415,7 +415,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
       panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.minor = element_blank(),
       axis.ticks = element_blank())
-  print(wf_plot)
+  # print(wf_plot)
   ggsave(paste0("figs/cascade_yearly_emi_",year_to_plot,"_scen.png"), width = 12, height = 8, dpi = 300)
 }
 

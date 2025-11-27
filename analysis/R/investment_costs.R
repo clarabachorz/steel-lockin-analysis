@@ -706,10 +706,10 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
   avg_investments <- plot_df %>%
     # start average over the first calculated timestep (2030 = 2026-2030 investments)
     filter(period >= 2030) %>%
-    group_by(period, scenario) %>%
+    group_by(period, scenario, component) %>%
     summarise(value = sum(value, na.rm = TRUE)) %>%
     ungroup() %>%
-    group_by(scenario) %>%
+    group_by(scenario, component) %>%
     summarise(mean = mean(value, na.rm = TRUE)) %>%
     ungroup() %>%
     mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith lock-in"))) %>%
@@ -795,9 +795,21 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       plot.margin = margin(10, 10, 40, 10)
     )
 
-  avg_plot <- ggplot(avg_investments, aes(x = scenario, y = mean)) +
-    geom_bar(stat = "identity", fill = "#adaaaa", width = 0.8) +
-    geom_text(aes(label = round(mean, 1)), vjust = -0.5, color = "grey50") +
+
+  totals_per_scenario <- avg_investments %>%
+    group_by(scenario) %>%
+    summarise(label = round(sum(mean, na.rm = TRUE), 1)) %>%
+    ungroup()
+
+  avg_plot <- ggplot(avg_investments, aes(x = scenario, y = mean, fill = component)) +
+    geom_bar(stat = "identity", position= "stack", width = 0.8) +
+    geom_text(
+      data = totals_per_scenario,
+      aes(x = scenario, y = label + (max_y * 0.1), label = label),
+      inherit.aes = FALSE,
+      size = 2.5,
+      color = "grey50"
+    ) +
     labs(
       title = paste0(
         region_names$region_name[region_names$region == region_to_plot],
@@ -806,6 +818,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       x = "Scenario",
       y = "Annual investments\n(Bill. USD/year)"
     ) +
+    scale_fill_manual(values = present_colors) +
     scale_y_continuous(
       limits = c(0, max_y),
       breaks = function(lims) {
@@ -813,22 +826,29 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       },
       ) +
     theme_bw(base_size = 8) +
+    guides(fill = guide_legend(ncol = 1)) +
     theme(
       panel.border = element_blank(),
       panel.grid.major.y = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.major.x = element_blank(),
       axis.ticks = element_blank(),
-      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, color = "black"),
       panel.grid.minor = element_blank(),
       strip.text = element_text(face = "bold"),
-      legend.position = "bottom",
-      plot.margin = margin(10, 20, 60, 5)
+      legend.position = "right",
+      legend.title.position =  "top",
+      legend.margin = margin(0, 0, 0, 0),
+      legend.key.size = unit(0.8,"line"),
+      plot.margin = margin(10, 15, 60, 10),
+      axis.title.y = element_blank()
     )
 
   combined_plot <- ggarrange(
     region_plot, avg_plot,
+    common.legend = TRUE,
+    legend = "right",
     labels = c("a", "b"), ncol = 2, nrow=1,
-    widths = c(2.8,1),
+    widths = c(2.5,1),
     font.label = list(size = 12, face = "bold")
     )
 
