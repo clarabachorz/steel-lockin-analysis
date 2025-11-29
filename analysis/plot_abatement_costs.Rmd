@@ -164,7 +164,7 @@ run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_agg
     discount_rate = discount_rate
   )
 
-  print(results$plot)
+  # print(results$plot)
 
   #save
   fig_name <- sprintf(
@@ -192,7 +192,13 @@ df_plot2 <- run_and_save_abatement_cost_plot(scenario1, scenario2, region_to_agg
 ##### combine the average abatement cost dfs 
 ##### (scen 0 -> scen 1 and scen1 -> scen 2 are the relevant ones here)
 #### used later for the cascade plot
-df_aac_combined <- rbind(df_plot1, df_plot2) %>% select(fscp, region, scenario1, scenario2)
+#### we add the fscp over the categories (energy and non-energy)
+df_aac_combined <- rbind(df_plot1, df_plot2) %>%
+  select(fscp, region, category, scenario1, scenario2) %>%
+  group_by(region, scenario1, scenario2) %>%
+  summarise(fscp = sum(fscp)) %>%
+  ungroup()
+
 ```
 
 ## Plot scenario costs vs CO2 value
