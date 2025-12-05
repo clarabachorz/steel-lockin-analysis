@@ -113,16 +113,16 @@ We perform the following actions on the data before plotting it manually:
 region_groups <- list(
     CHA="China",
     IND="India",
-    CAZ="REJUCAZ",
-    EUR="REJUCAZ",
-    JPN="REJUCAZ",
-    LAM="Lat. America & Oth. Asia",
-    MEA="Middle East & North. Africa",
-    NEU="REJUCAZ",
-    OAS="Lat. America & Oth. Asia",
-    REF="REJUCAZ",
+    CAZ="Global North",
+    EUR="Global North",
+    JPN="Global North",
+    LAM="Lat. America &\nOth. Asia",
+    MEA="Middle East &\nNorth. Africa",
+    NEU="Global North",
+    OAS="Lat. America &\nOth. Asia",
+    REF="Global North",
     SSA="Sub-Saharan Africa",
-    USA="REJUCAZ",
+    USA="Global North",
     World="World"
 )
 ```
@@ -179,15 +179,15 @@ ylab <- "Annual steel production (Mt/yr)"
 ```{r}
 regs <- c("World", "China", "India")
 
-for (f in c("Figure3", "FigureED1")) {
+for (f in c("Figure3", "FigureED2")) {
     if (f == "Figure3") {
         df_rows <- df_plot %>% filter(region %in% regs)
         df_rows$region <- factor(df_rows$region, levels = regs)
     } else {
         df_rows <- df_plot %>% filter(!region %in% regs)
     }
-    df_rows <- df_rows %>% mutate(scenario=unlist(scen_shortnames)[scenario])
-    df_rows$scenario <- factor(df_rows$scenario, levels = c(unlist(scen_shortnames)))
+    df_rows <- df_rows %>% mutate(scenario=unlist(scen_names)[scenario])
+    df_rows$scenario <- factor(df_rows$scenario, levels = c(unlist(scen_names)))
 
     # add panel letters
     panel_keys <- df_rows %>%
@@ -211,7 +211,7 @@ for (f in c("Figure3", "FigureED1")) {
         labs(title = NULL, x = NULL, y = ylab) +
         theme_minimal() +
         theme(
-          axis.text.x = element_text(size = 7),
+          axis.text.x = element_text(size = 7, angle = 90),
           axis.text.y = element_text(size = 7),
           axis.title.y = element_text(size = 9),
           strip.text.x = element_text(size = 8),
@@ -232,7 +232,7 @@ for (f in c("Figure3", "FigureED1")) {
                 "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage\n(DRI-NG-EAF-CCS)",
                 "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
                 "Primary steel using a blast furnace and\na basic oxygen furnace with carbon\ncapture and storage (BF-BOF-CCS)",
-                "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF)"
+                "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF). For\nIndia, this includes existing\ncoal-based DRI production."
             ),
         )
     write_images(fig, f, height = mm(180))
@@ -275,6 +275,6 @@ area_world <- ggplot(world_df, aes(x = period, y = value, fill = variable, group
     strip.text = element_text(size = 9)
   )
 
-write_images(area_world, "FigureED2", width = mm(180), height = mm(100))
+write_images(area_world, "FigureED1", width = mm(180), height = mm(100))
 show(area_world)
 ```
