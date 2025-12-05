@@ -427,7 +427,6 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
     )
 
     fscp_df_grouped$region <- factor(fscp_df_grouped$region, levels = region_order_by_total)
-    print(fscp_df_grouped$region)
 
     # Plotting
     plot_abatement_cost <- function(df, discount_rate, start_date, end_date, scen1_name, scen2_name) {
@@ -438,6 +437,7 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
                 x = "Cumulative emission difference (GtCo2)",
                 y = "Average abatement cost (USD/tCO2)"
             ) +
+            theme_classic(base_size = 10) +
             scale_fill_manual(
                 name = "Region",
                 values = c(
@@ -452,8 +452,9 @@ run_abatement_analysis <- function(scen1, scen2, region_to_aggr, start_date, end
                     name = "Cost",
                     labels = c("energy" = "Energy", "non-energy" = "Non-energy"),
                     guide = guide_legend(reverse = TRUE)) +
-            ylim(0, 350) +
-            xlim(0,70)
+            ylim(0, 350) 
+            # +
+            # xlim(0,70)
     }
 
     list(

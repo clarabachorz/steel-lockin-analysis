@@ -153,7 +153,7 @@ The average abatement cost is a single metric, which yield the average CO2 price
 The average abatement costs calculated are later added to Figure 4 (emission cascade plot)
 ```{R plot average abatement costs}
 
-run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate) {
+run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate, save_plot = FALSE, filename = NULL) {
   ## "scen1" should be the lower ambition scenario
   results <- run_abatement_analysis(
     scen1 = scenario1,
@@ -164,18 +164,11 @@ run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_agg
     discount_rate = discount_rate
   )
 
-  # print(results$plot)
-
   #save
-  fig_name <- sprintf(
-    "./figs/abatement_costs_%s_vs_%s_dr%.2f_%d-%d.png",
-    gsub(" ", "", scenario1$name),
-    gsub(" ", "", scenario2$name),
-    discount_rate,
-    start_date,
-    end_date
-  )
-  ggsave(fig_name, plot = results$plot, width = 10, height = 6)
+  if (save_plot) {
+    ggsave(paste0(filename, ".png"), plot = results$plot, width = 180, height = 90, unit = "mm")
+    ggsave(paste0(filename, ".svg"), plot = results$plot, width = 180, height = 90, unit = "mm")
+    }
   return(results$fscp_df_grouped %>% mutate(scenario1 = scenario1$name, scenario2 = scenario2$name))
 }
 
@@ -183,8 +176,9 @@ run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_agg
 #### saves the plot and returns the df used
 df_plot <- run_and_save_abatement_cost_plot(scenario0, scenario2, region_to_aggr, start_date, end_date, discount_rate)
 #### Abatement costs: NPi to Lockin
+#### this is also Figure ED3
 #### saves the plot and returns the df used
-df_plot1 <- run_and_save_abatement_cost_plot(scenario0, scenario1, region_to_aggr, start_date, end_date, discount_rate)
+df_plot1 <- run_and_save_abatement_cost_plot(scenario0, scenario1, region_to_aggr, start_date, end_date, discount_rate, save_plot = TRUE, filename = "./figs/FigureED3")
 #### Abatement costs: Lockin to fast transition
 #### saves the plot and returns the df used
 df_plot2 <- run_and_save_abatement_cost_plot(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate)
@@ -201,20 +195,22 @@ df_aac_combined <- rbind(df_plot1, df_plot2) %>%
 
 ```
 
-## Plot scenario costs vs CO2 value
-Plot Figure 3b., which shows the total additional cost of the Fast Transition scenario compared to
+
+## Plot emission cascade plots
+Plot Figure 4: combine the cumulated emission cascade plot with the scenario costs vs CO2 value plot.
+Add the average abatement cost information to the cascade (df_aac_combined).
+
+### Plot scenario costs vs CO2 value
+First plots Figure 4b., which shows the total additional cost of the Fast Transition scenario compared to
 Transition with Lock-in scenario (over a defined period and discount rate). This is compared to the value of the additional
 CO2 abated (calculated using CO2 price * emission reduction between the two scenarios). 
-```{R plot abatement costs vs CO2 value}
 
+```{R plot cumulative emissions cascade}
+
+# plot Fig 4b: scenario additional costs vs co2 value
 df <- run_scenario_cost_andCO2value_comparison(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
 p_scenariocost_vs_co2value <- df$plot
-```
-## Plot emission cascade plots
-Plot Figure 3: combine the cumulated emission cascade plot with the scenario costs vs CO2 value plot.
-Add the average abatement cost information to the cascade (df_aac_combined).
-```{R plot cumulative emissions cascade}
-# Fig3. Emission cascade plots
+
 #create list of scenarios with mif data
 mif_list <- lapply(scenarios, function(scen) {
   mif <- read.quitte(scen$mif_file)
@@ -222,10 +218,10 @@ mif_list <- lapply(scenarios, function(scen) {
   mif
 })
 
-## plot cascade plots: cumulative emissions (combined with abatement costs and co2 value plot)
+## Fig 4: emission cascade plots for cumulative emissions (combined with abatement costs and co2 value plot)
 combine_cascade_cumueum_and_co2value_plot(mif_list, df_aac_combined, p_scenariocost_vs_co2value, show_aac_annotations = TRUE)
 
-## plot cascade plots: yearly
+## Additional plots: yearly emission cascades for specific years
 # plot_cascade_yearlyem(mif_list, year_to_plot= 2050)
 # plot_cascade_yearlyem(mif_list, year_to_plot= 2060)
 # plot_cascade_yearlyem(mif_list, year_to_plot= 2070)
@@ -238,7 +234,12 @@ Plots Figure 5, which shows the total investments required in the different scen
 df.totalcosts <- combine_investment_costs(scenarios)
 
 # plot investment costs for India
+# Figure 5
 plot_invst_costs_v2(df.totalcosts, region_to_plot = "IND", save_plot = TRUE)
+
+# fossil costs only (last missing steel system cost component)
+# Figure ED4
+plot_invst_fossil(df.totalcosts, region_to_plot = "IND",save_plot = TRUE)
 
 ```
 

@@ -313,7 +313,8 @@ combine_cascade_cumueum_and_co2value_plot <- function(mif_list, df_aac_combined,
     font.label = list(size = 16, face = "bold")
     )
   # p_combined
-  ggsave("./figs/combined_cascade_and_cost_vs_co2value.png", p_combined, width = 180, height = 180, units = "mm")
+  ggsave("./figs/Figure4.png", p_combined, width = 180, height = 180, units = "mm")
+  ggsave("./figs/Figure4.svg", p_combined, width = 180, height = 180, units = "mm")
 }
 
 plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {

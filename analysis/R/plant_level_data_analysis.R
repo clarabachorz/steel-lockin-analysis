@@ -470,7 +470,8 @@ plot_emissions_1relining <- function(save_plot=FALSE){
               lineheight = 0.9, size = 2.9)
 
   if(save_plot){
-    ggsave("figs/BOF_emissions_plot_1relining.png", width = 180, height = 140, units = "mm", dpi = 300)
+    ggsave("figs/Figure2.png", width = 180, height = 140, units = "mm", dpi = 300)
+    ggsave("figs/Figure2.svg", width = 180, height = 140, units = "mm")
   }
 }
 
@@ -765,7 +766,8 @@ plot_combine_production_and_cap_additions <- function(save_plot=FALSE){
                             align = "v")
   # print(combined_plot)
   if(save_plot){
-    ggsave("figs/BOF_regional_production_and_capacity_additions_plot.png", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
+    ggsave("figs/Figure1.png", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
+    ggsave("figs/Figure1.svg", combined_plot, width = 180, height = 100, units = "mm")
   }
 }
 
