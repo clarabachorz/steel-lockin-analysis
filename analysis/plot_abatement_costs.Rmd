@@ -40,33 +40,64 @@ if (!dir.exists("./figs")) {
 # 2) and 3): REMIND scenario output: the gdx file (unprocessed) and the mif file (processed gdx file)
 # 4) the average levelized cost of steel (calculated with lco_analysis.R using the gdx file)
 
-scenario0 <- list(
+scenario_CP <- list(
   name = "Current policies",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-NPi.mif",
   gdx = "inputdata/gdx/TransitionwLockIn-NPi.gdx",
   lcop_file = "./inputdata/other/lcop_avg_npi.csv"
 )
-scenario1 <- list(
+scenario_TWLI <- list(
   name = "Transition with lock-in",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif",
   gdx = "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx",
   lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in.csv"
 )
-scenario2 <- list(
+scenario_FT <- list(
   name = "Fast transition",
   mif_file = "inputdata/mif/REMIND_generic_FastTransition-PkBudg820.mif",
   gdx = "inputdata/gdx/FastTransition-PkBudg820.gdx",
   lcop_file = "./inputdata/other/lcop_avg_fast_transition.csv"
 )
-scenario3 <- list(
+scenario_TWLI_1p5LO <- list(
   name = "Transition with lock-in 650",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg650.mif",
   gdx = "inputdata/gdx/TransitionwLockIn-PkBudg650.gdx",
   lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in_650.csv"
 )
 
-scenarios <- list(scenario0, scenario1, scenario2)
-scenarios_for_lcop <- list(scenario0, scenario1, scenario2, scenario3)
+#other scenario definitions for sensitivity analysis (supplementary only)
+scenario_FT_1p5LO <- list(
+  name = "FT 650",
+  mif_file = "inputdata/mif/REMIND_generic_FastTransition-PkBudg650.mif"
+)
+
+scenario_TWLI_2C <- list(
+  name = "Transition with lock-in 2C",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg1000.mif"
+)
+
+scenario_FT_2C <- list(
+  name = "FT 2C",
+  mif_file = "inputdata/mif/REMIND_generic_FastTransition-PkBudg1000.mif"
+)
+
+scenario_TWLI_lowBio_highCCS <- list(
+  name = "Transition with lock-in low bio high CCS",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_lowBio_highCCSinjecrate-PkBudg820.mif"
+)
+
+scenario_TWLI_lowBio <- list(
+  name = "Transition with lock-in low bio",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_lowBio-PkBudg820.mif"
+)
+
+scenario_TWLI_highCCS <- list(
+  name = "Transition with lock-in high CCS",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_highCCSinjecrate-PkBudg820.mif"
+)
+
+scenarios <- list(scenario_CP, scenario_TWLI, scenario_FT)
+scenarios_for_lcop <- list(scenario_CP, scenario_TWLI, scenario_FT, scenario_TWLI_1p5LO)
 # for the abatement figures: select which regions to aggregate. 
 # Default: other asia + latin america,
 # and global north countries.
@@ -153,11 +184,11 @@ The average abatement cost is a single metric, which yield the average CO2 price
 The average abatement costs calculated are later added to Figure 4 (emission cascade plot)
 ```{R plot average abatement costs}
 
-run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate, save_plot = FALSE, filename = NULL) {
+run_and_save_abatement_cost_plot <- function(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate, save_plot = FALSE, filename = NULL) {
   ## "scen1" should be the lower ambition scenario
   results <- run_abatement_analysis(
-    scen1 = scenario1,
-    scen2 = scenario2,
+    scen1 = scenario_TWLI,
+    scen2 = scenario_FT,
     region_to_aggr = region_to_aggr,
     start_date = start_date,
     end_date = end_date,
@@ -169,27 +200,27 @@ run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_agg
     ggsave(paste0(filename, ".png"), plot = results$plot, width = 180, height = 90, unit = "mm")
     ggsave(paste0(filename, ".svg"), plot = results$plot, width = 180, height = 90, unit = "mm")
     }
-  return(results$fscp_df_grouped %>% mutate(scenario1 = scenario1$name, scenario2 = scenario2$name))
+  return(results$fscp_df_grouped %>% mutate(scenario_TWLI = scenario_TWLI$name, scenario_FT = scenario_FT$name))
 }
 
 #### Abatement costs: NPi to Fast Transition
 #### saves the plot and returns the df used
-df_plot <- run_and_save_abatement_cost_plot(scenario0, scenario2, region_to_aggr, start_date, end_date, discount_rate)
+df_plot <- run_and_save_abatement_cost_plot(scenario_CP, scenario_FT, region_to_aggr, start_date, end_date, discount_rate)
 #### Abatement costs: NPi to Lockin
 #### this is also Figure ED3
 #### saves the plot and returns the df used
-df_plot1 <- run_and_save_abatement_cost_plot(scenario0, scenario1, region_to_aggr, start_date, end_date, discount_rate, save_plot = TRUE, filename = "./figs/FigureED3")
+df_plot1 <- run_and_save_abatement_cost_plot(scenario_CP, scenario_TWLI, region_to_aggr, start_date, end_date, discount_rate, save_plot = TRUE, filename = "./figs/FigureED3")
 #### Abatement costs: Lockin to fast transition
 #### saves the plot and returns the df used
-df_plot2 <- run_and_save_abatement_cost_plot(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate)
+df_plot2 <- run_and_save_abatement_cost_plot(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate)
 
 ##### combine the average abatement cost dfs 
 ##### (scen 0 -> scen 1 and scen1 -> scen 2 are the relevant ones here)
 #### used later for the cascade plot
 #### we add the fscp over the categories (energy and non-energy)
 df_aac_combined <- rbind(df_plot1, df_plot2) %>%
-  select(fscp, region, category, scenario1, scenario2) %>%
-  group_by(region, scenario1, scenario2) %>%
+  select(fscp, region, category, scenario_TWLI, scenario_FT) %>%
+  group_by(region, scenario_TWLI, scenario_FT) %>%
   summarise(fscp = sum(fscp)) %>%
   ungroup()
 
@@ -208,7 +239,7 @@ CO2 abated (calculated using CO2 price * emission reduction between the two scen
 ```{R plot cumulative emissions cascade}
 
 # plot Fig 4b: scenario additional costs vs co2 value
-df <- run_scenario_cost_andCO2value_comparison(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
+df <- run_scenario_cost_andCO2value_comparison(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
 p_scenariocost_vs_co2value <- df$plot
 
 #create list of scenarios with mif data
@@ -257,7 +288,48 @@ gdx_list$name <- lapply(scenarios, function(scen) {
   scen$name
 })
 
-# Ext. Fig. ?: REMIND steel capacity additions by region and technology
-plot_REMIND_steel_cap_add(gdx_list)
+## Ext. Fig. ?: REMIND steel capacity additions by region and technology
+# plot_REMIND_steel_cap_add(gdx_list)
+
 # Supp. Fig. ?:
+#create list of scenarios with mif data
+# scens_1p5LO <- list(scenario_FT_1p5LO, scenario_TWLI_1p5LO)
+# mif_list_1p5LO <- lapply(scens_1p5LO, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+# plot_REMIND_steel_production(mif_list_1p5LO, fig_name = "FigureS1")
+
+# scens_2C <- list(scenario_FT_2C, scenario_TWLI_2C)
+# mif_list_2C <- lapply(scens_2C, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+# plot_REMIND_steel_production(mif_list_2C, fig_name = "FigureS2")
+
+# scens_CCS <- list(scenario_TWLI, scenario_TWLI_highCCS, scenario_TWLI_lowBio, scenario_TWLI_lowBio_highCCS)
+# mif_list_CCS <- lapply(scens_CCS, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+# plot_REMIND_steel_production(mif_list_CCS, fig_name = "FigureS3")
+
+
+## Supp. Fig 4: CO2 prices from all main scenarios
+
+# mif_list <- lapply(scenarios, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+plot_co2_prices(mif_list, fig_name = "FigureS4")
+
+
+plot_energy_prices(mif_list, "Price|Final Energy|Industry|Solids|Rawdata", "Solid fuel", fig_name = "FigureS5")
+plot_energy_prices(mif_list, "Price|Final Energy|Industry|Gases|Rawdata", "Gaseous fuel (excl. hydrogen)\n", fig_name = "FigureS6")
+plot_energy_prices(mif_list, "Price|Final Energy|Industry|Hydrogen|Rawdata", "Hydrogen", fig_name = "FigureS7")
+plot_energy_prices(mif_list, "Price|Final Energy|Industry|Electricity|Rawdata", "Electricity", fig_name = "FigureS8")
 ```

@@ -33,6 +33,53 @@ tech_label <- c(
     "bof"         = "BF-BOF"
 )
 
+custom_colors_prod <- c(
+    "SCRAP-EAF"         = "#ffb200",  # secondary / EAF
+    "DRI-H2-EAF"        = "#66cccc",  # DRI + H2
+    "DRI-NG-EAF-CCS"    = "#e5e5b2",  # DRI NG + CCS
+    "DRI-NG-EAF"        = "#999959",  # DRI NG
+    "BF-BOF-CCS"        = "#b2b2b2",  # BF-BOF + CCS
+    "BF-BOF"            = "#0c0c0c"   # BF-BOF
+    )
+
+region_groups <- list(
+    CHA="China",
+    IND="India",
+    CAZ="Global North",
+    EUR="Global North",
+    JPN="Global North",
+    LAM="Lat. America &\nOth. Asia",
+    MEA="Middle East &\nNorth. Africa",
+    NEU="Global North",
+    OAS="Lat. America &\nOth. Asia",
+    REF="Global North",
+    SSA="Sub-Saharan Africa",
+    USA="Global North",
+    World="World"
+)
+
+scen_names <- list(
+    "TransitionwLockIn-NPi" = "Current Policies",
+    "TransitionwLockIn-PkBudg820" = "TwLI",
+    "TransitionwLockIn-PkBudg650" = "Transition w lock-in (1.5C,\nlow overshoot)",
+    "TransitionwLockIn-PkBudg1000" = "Transition w lock-in (2°C)",
+    "FastTransition-PkBudg820" = "Fast transition",
+    "FastTransition-PkBudg1000" = "Fast transition (2°C)",
+    "FastTransition-PkBudg650" = "Fast transition (1.5C,\nlow overshoot)",
+    "TransitionwLockIn_highCCSinjecrate-PkBudg820" = "TwLI (moreCCS)",
+    "TransitionwLockIn_lowBio-PkBudg820" = "TwLI (LowBio)",
+    "TransitionwLockIn_lowBio_highCCSinjecrate-PkBudg820" = "TwLI (moreCCS & LowBio)"
+)
+
+write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
+    for (f in formats) {
+        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps')) {
+            stop(paste0('Unknown format', f))
+        }
+        path <- paste0("./figs/", name, ".", f)
+        ggsave(path, plot = fig, width = width, height = height, dpi = dpi, create.dir = TRUE)
+    }
+}
 
 calc_steel_cap_add <- function(gdx) {
     # load basic variables needed
@@ -134,4 +181,227 @@ plot_REMIND_steel_cap_add <- function(gdxlist) {
             axis.text.x = element_text(angle = 45, hjust = 1)
         )
     print(cap_add_ind)
+}
+
+plot_REMIND_steel_production <- function(mif_list, fig_name) {
+    df_data <- bind_rows(mif_list) %>% filter(grepl("Production|Industry|Steel|+", variable, fixed = TRUE))
+
+    df_plot <- (
+        df_data %>%
+        mutate(region = recode(region, !!!region_groups)) %>%
+        group_by(model, scenario, region, period, variable, unit) %>%
+        summarise(value = sum(value)) %>%
+        mutate(variable = sub("Production|Industry|Steel|+|", "", variable, fixed = TRUE)) %>%
+        filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070)) %>%
+        # for now, plot only world steel production
+        filter(region == "World")
+    )
+
+    # Sort variable by custom order.
+    df_plot$variable <- factor(df_plot$variable, levels = c('SCRAP-EAF', 'DRI-H2-EAF', 'DRI-NG-EAF-CCS', 'DRI-NG-EAF', 'BF-BOF-CCS', 'BF-BOF'))
+    
+    df_rows <- df_plot %>%
+        mutate(scenario = recode(scenario, !!!scen_names)) %>%
+        mutate(scenario = factor(scenario, levels = c(unlist(scen_names))))
+
+    print(df_rows %>% filter(period == 2050, variable == "BF-BOF"))
+    fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
+        geom_bar(stat = "identity") +
+        facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +
+        labs(title = NULL, x = NULL, y = ylab) +
+        theme_minimal() +
+        theme(
+          axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = 0.5),
+          axis.text.y = element_text(size = 7),
+          axis.title.y = element_text(size = 9),
+          strip.text.x = element_text(size = 8),
+          strip.text.y = element_text(size = 8),
+          legend.title = element_text(size = 8),
+          legend.text = element_text(size = 7),
+          legend.position = "bottom",
+          legend.key.height = unit(10, "mm"),
+          plot.margin = margin(10, 10, 10, 25)
+        ) +
+        coord_cartesian(clip = "off") +
+        scale_fill_manual(
+            values = custom_colors_prod,
+            name = NULL,
+            labels = c(
+                "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+                "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage\n(DRI-NG-EAF-CCS)",
+                "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+                "Primary steel using a blast furnace and\na basic oxygen furnace with carbon\ncapture and storage (BF-BOF-CCS)",
+                "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF). For\nIndia, this includes existing\ncoal-based DRI production."
+            ),
+        )
+    write_images(fig, fig_name, height = mm(140))
+    show(fig)
+}
+
+plot_co2_prices <- function(mif_list, fig_name) {
+    df_data <- bind_rows(mif_list) %>% filter(variable == "Price|Carbon")
+
+    df_plot <- (
+        df_data %>%
+        mutate(region = recode(region, !!!region_groups)) %>%
+        group_by(model, scenario, region, period, variable, unit) %>%
+        summarise(value = mean(value)) %>%
+        filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070))
+    )
+
+    df_rows <- df_plot %>%
+        mutate(scenario = recode(scenario, !!!scen_names)) %>%
+        mutate(scenario = factor(scenario, levels = c(unlist(scen_names))))
+
+    df_world <- df_rows %>% filter(region == "World")
+    df_other <- df_rows %>% filter(region != "World")
+
+    p_world <- ggplot(df_world, aes(x = period, y = value, color = scenario)) +
+        geom_line(linewidth = 0.7) +
+        geom_point(size = 1) +
+        facet_wrap(~ region, nrow = 1) +
+        labs(title = NULL, x = NULL, y = "Carbon price (USD/tCO2)", color = "Scenario") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 7),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 9),
+            strip.text.x = element_text(size = 8),
+            strip.text.y = element_text(size = 8),
+            legend.title = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.position = "bottom",
+            legend.margin = margin(t = -5, b = 0),
+            legend.key.height = unit(6, "mm"),
+            legend.key.width = unit(6, "mm"),
+            plot.margin = margin(10, 10, 10, 10),
+            strip.background = element_rect(fill = "grey90", color = NA),
+            panel.spacing = unit(6, "pt"),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(linewidth = 0.25)
+        ) +
+        coord_cartesian(clip = "off") +
+        scale_color_manual(
+            values = c(
+                "Current Policies" = "#231f20",
+                "TwLI" = "#bb4430",
+                "Fast transition" = "#7ebdc2"
+            )
+        ) +
+        guides(color = guide_legend(
+            title.position = "left",
+            nrow = 1
+        ))
+
+
+    p_other <- ggplot(df_other, aes(x = period, y = value, color = scenario)) +
+        geom_line(linewidth = 0.7) +
+        geom_point(size = 1) +
+        facet_wrap(~ region, nrow = 2) +
+        # labs(title = NULL, x = NULL, y = "Carbon price (USD/tCO2)", color = "Scenario") +
+        labs(title = NULL, x = NULL, y = NULL, color = "Scenario") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = 0.5),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 9),
+            strip.text.x = element_text(size = 8),
+            strip.text.y = element_text(size = 8),
+            legend.title = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.position = "bottom",
+            legend.margin = margin(t = -5, b = 0),
+            legend.key.height = unit(6, "mm"),
+            legend.key.width = unit(6, "mm"),
+            plot.margin = margin(10, 10, 10, 10),
+            strip.background = element_rect(fill = "grey90", color = NA),
+            panel.spacing = unit(6, "pt"),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(linewidth = 0.25)
+        ) +
+        coord_cartesian(clip = "off") +
+        scale_color_manual(
+            values = c(
+                "Current Policies" = "#231f20",
+                "TwLI" = "#bb4430",
+                "Fast transition" = "#7ebdc2"
+            )
+        ) +
+        guides(color = guide_legend(
+            title.position = "left",
+            nrow = 1
+        ))
+
+    fig <- ggarrange(
+        p_world,
+        p_other,
+        ncol = 2,
+        nrow = 1,
+        common.legend = TRUE,
+        legend = "bottom"
+    )
+
+    write_images(fig, fig_name, height = mm(140))
+    show(fig)
+}
+
+
+plot_energy_prices <- function(mif_list, var, var_name, fig_name) {
+    df_data <- bind_rows(mif_list) %>% filter(variable == var)
+
+    df_plot <- (
+        df_data %>%
+        mutate(region = recode(region, !!!region_groups)) %>%
+        group_by(model, scenario, region, period, variable, unit) %>%
+        summarise(value = mean(value)) %>%
+        filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070))
+    )
+
+    df_rows <- df_plot %>%
+        mutate(scenario = recode(scenario, !!!scen_names)) %>%
+        mutate(scenario = factor(scenario, levels = c(unlist(scen_names))))
+
+    df_other <- df_rows %>% filter(region != "World")
+
+
+    fig <- ggplot(df_other, aes(x = period, y = value, color = scenario)) +
+        geom_line(linewidth = 0.7) +
+        geom_point(size = 1) +
+        facet_wrap(~ region, nrow = 2) +
+        labs(title = NULL, x = NULL, y = paste(var_name, "price (USD/GJ)"), color = "Scenario:") +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(size = 7),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 9),
+            strip.text.x = element_text(size = 8),
+            strip.text.y = element_text(size = 8),
+            legend.title = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.position = "bottom",
+            legend.margin = margin(t = -5, b = 0),
+            legend.key.height = unit(6, "mm"),
+            legend.key.width = unit(6, "mm"),
+            plot.margin = margin(10, 10, 10, 10),
+            strip.background = element_rect(fill = "grey90", color = NA),
+            panel.spacing = unit(6, "pt"),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(linewidth = 0.25)
+        ) +
+        coord_cartesian(clip = "off") +
+        scale_color_manual(
+            values = c(
+                "Current Policies" = "#231f20",
+                "TwLI" = "#bb4430",
+                "Fast transition" = "#7ebdc2"
+            )
+        ) +
+        guides(color = guide_legend(
+            title.position = "left",
+            nrow = 1
+        ))
+
+    write_images(fig, fig_name, height = mm(140))
+    # show(fig)
 }
