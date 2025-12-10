@@ -155,7 +155,7 @@ bar_width_double <- 10 - bar_spacing
 
 scen_names <- list(
     "TransitionwLockIn-NPi" = "Current Policies",
-    "TransitionwLockIn-PkBudg820" = "Extended lock-in",
+    "TransitionwLockIn-PkBudg820" = "Transition with\nlock-in",
     "FastTransition-PkBudg820" = "Fast transition"
 )
 scen_shortnames <- list(

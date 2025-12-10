@@ -263,10 +263,10 @@ plot_emissions_1and2relining <- function(save_plot=FALSE){
       )
     ) +
       scale_y_continuous( limits = c(0, 3100),
-      name = "Global yearly emissions from BF-BOF steel-making\n(MtCO2/yr), barplot",
+      name = "Global yearly emissions from BF-BOF* steel-making\n(MtCO2/yr), barplot",
       sec.axis = sec_axis(~ . * scale_factor, name = "Cumulative CO2 Emissions from 2025,\nfrom BF-BOF steel-making (MtCO2, line plots)")
     ) +
-    labs(caption = "*BF-BOF is used as a general term; however, a small subset of included BOF facilities operate\nwithout a BF or rely on alternative iron production methods."
+    labs(caption = "*BF-BOF is used as a general term; a small subset of included BOF facilities operate\nwithout a BF or rely on alternative iron production methods."
           ) +
     # labs(color = "Line Legend") +
     scale_x_discrete(breaks = x_breaks) +
@@ -377,7 +377,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
                                 "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity,\nassuming one BF relining",
                                 "Total_net_existing_BOF_capacity" = "Operating BF-BOF capacity,\nassuming no further BF\nrelinings"))+
     labs(
-      title = "Global yearly and cumulative CO2 emissions from existing and planned BF-BOF plants",
+      title = "Global yearly and cumulative CO2 emissions from existing and planned BF-BOF* plants",
       fill = "Bar legend",
       x = "",
       color = "Line legend: cumulative\nCO2 emissions from 2025")
@@ -404,7 +404,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
       name = "Yearly emissions (Gt CO2/year, bar plot)",
       sec.axis = sec_axis(~ . * scale_factor, name = "Cumulative emissions from 2025 (Gt CO2, line plots)")
     ) +
-    labs(caption = "*BF-BOF is used as a general term; however, a small subset of included BOF\nfacilities operate without a BF or rely on alternative iron production methods."
+    labs(caption = "*BF-BOF is used as a general term; a small subset of included BOF\nfacilities operate without a BF or rely on alternative iron production methods."
           ) +
     # labs(color = "Line Legend") +
     scale_x_discrete(breaks = x_breaks) +
