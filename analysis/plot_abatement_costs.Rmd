@@ -184,11 +184,11 @@ The average abatement cost is a single metric, which yield the average CO2 price
 The average abatement costs calculated are later added to Figure 4 (emission cascade plot)
 ```{R plot average abatement costs}
 
-run_and_save_abatement_cost_plot <- function(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate, save_plot = FALSE, filename = NULL) {
+run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_aggr, start_date, end_date, discount_rate, save_plot = FALSE, filename = NULL) {
   ## "scen1" should be the lower ambition scenario
   results <- run_abatement_analysis(
-    scen1 = scenario_TWLI,
-    scen2 = scenario_FT,
+    scen1 = scenario1,
+    scen2 = scenario2,
     region_to_aggr = region_to_aggr,
     start_date = start_date,
     end_date = end_date,
@@ -200,7 +200,7 @@ run_and_save_abatement_cost_plot <- function(scenario_TWLI, scenario_FT, region_
     ggsave(paste0(filename, ".png"), plot = results$plot, width = 180, height = 90, unit = "mm")
     ggsave(paste0(filename, ".svg"), plot = results$plot, width = 180, height = 90, unit = "mm")
     }
-  return(results$fscp_df_grouped %>% mutate(scenario_TWLI = scenario_TWLI$name, scenario_FT = scenario_FT$name))
+  return(results$fscp_df_grouped %>% mutate(scenario1 = scenario1$name, scenario2 = scenario2$name))
 }
 
 #### Abatement costs: NPi to Fast Transition
@@ -219,10 +219,11 @@ df_plot2 <- run_and_save_abatement_cost_plot(scenario_TWLI, scenario_FT, region_
 #### used later for the cascade plot
 #### we add the fscp over the categories (energy and non-energy)
 df_aac_combined <- rbind(df_plot1, df_plot2) %>%
-  select(fscp, region, category, scenario_TWLI, scenario_FT) %>%
-  group_by(region, scenario_TWLI, scenario_FT) %>%
+  select(fscp, region, category, scenario1, scenario2) %>%
+  group_by(region, scenario1, scenario2) %>%
   summarise(fscp = sum(fscp)) %>%
   ungroup()
+
 
 ```
 
@@ -237,7 +238,6 @@ Transition with Lock-in scenario (over a defined period and discount rate). This
 CO2 abated (calculated using CO2 price * emission reduction between the two scenarios). 
 
 ```{R plot cumulative emissions cascade}
-
 # plot Fig 4b: scenario additional costs vs co2 value
 df <- run_scenario_cost_andCO2value_comparison(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
 p_scenariocost_vs_co2value <- df$plot
@@ -245,6 +245,7 @@ p_scenariocost_vs_co2value <- df$plot
 #create list of scenarios with mif data
 mif_list <- lapply(scenarios, function(scen) {
   mif <- read.quitte(scen$mif_file)
+  mif$scenario <tte(scen$mif_file)
   mif$scenario <- scen$name
   mif
 })
@@ -293,37 +294,37 @@ gdx_list$name <- lapply(scenarios, function(scen) {
 
 # Supp. Fig. ?:
 #create list of scenarios with mif data
-# scens_1p5LO <- list(scenario_FT_1p5LO, scenario_TWLI_1p5LO)
-# mif_list_1p5LO <- lapply(scens_1p5LO, function(scen) {
-#   mif <- read.quitte(scen$mif_file)
-#   mif
-# })
+scens_1p5LO <- list(scenario_FT_1p5LO, scenario_TWLI_1p5LO)
+mif_list_1p5LO <- lapply(scens_1p5LO, function(scen) {
+  mif <- read.quitte(scen$mif_file)
+  mif
+})
 
-# plot_REMIND_steel_production(mif_list_1p5LO, fig_name = "FigureS1")
+plot_REMIND_steel_production(mif_list_1p5LO, fig_name = "FigureS1")
 
-# scens_2C <- list(scenario_FT_2C, scenario_TWLI_2C)
-# mif_list_2C <- lapply(scens_2C, function(scen) {
-#   mif <- read.quitte(scen$mif_file)
-#   mif
-# })
+scens_2C <- list(scenario_FT_2C, scenario_TWLI_2C)
+mif_list_2C <- lapply(scens_2C, function(scen) {
+  mif <- read.quitte(scen$mif_file)
+  mif
+})
 
-# plot_REMIND_steel_production(mif_list_2C, fig_name = "FigureS2")
+plot_REMIND_steel_production(mif_list_2C, fig_name = "FigureS2")
 
-# scens_CCS <- list(scenario_TWLI, scenario_TWLI_highCCS, scenario_TWLI_lowBio, scenario_TWLI_lowBio_highCCS)
-# mif_list_CCS <- lapply(scens_CCS, function(scen) {
-#   mif <- read.quitte(scen$mif_file)
-#   mif
-# })
+scens_CCS <- list(scenario_TWLI, scenario_TWLI_highCCS, scenario_TWLI_lowBio, scenario_TWLI_lowBio_highCCS)
+mif_list_CCS <- lapply(scens_CCS, function(scen) {
+  mif <- read.quitte(scen$mif_file)
+  mif
+})
 
-# plot_REMIND_steel_production(mif_list_CCS, fig_name = "FigureS3")
+plot_REMIND_steel_production(mif_list_CCS, fig_name = "FigureS3")
 
 
 ## Supp. Fig 4: CO2 prices from all main scenarios
 
-# mif_list <- lapply(scenarios, function(scen) {
-#   mif <- read.quitte(scen$mif_file)
-#   mif
-# })
+mif_list <- lapply(scenarios, function(scen) {
+  mif <- read.quitte(scen$mif_file)
+  mif
+})
 
 plot_co2_prices(mif_list, fig_name = "FigureS4")
 
