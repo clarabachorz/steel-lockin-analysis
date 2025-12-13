@@ -195,7 +195,7 @@ for (f in c("Figure3", "FigureED2")) {
         summarise(period = min(as.numeric(period)), .groups = "drop") %>%
         arrange(region) %>%
         mutate(panel_label = letters[seq_len(n())], "")
-  
+
     fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
         geom_bar(stat = "identity") +
         facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +
@@ -204,7 +204,7 @@ for (f in c("Figure3", "FigureED2")) {
           data = panel_keys,
           mapping = aes(x = -Inf, y = Inf, label = panel_label),
           inherit.aes = FALSE,
-          hjust = 7, vjust = -0.2,
+          hjust = 6, vjust = -0.5,
           size = 4.5, fontface = "bold",
           colour = "black"
         ) +
@@ -220,7 +220,8 @@ for (f in c("Figure3", "FigureED2")) {
           legend.text = element_text(size = 7),
           legend.position = "bottom",
           legend.key.height = unit(10, "mm"),
-          plot.margin = margin(10, 10, 10, 25)
+          plot.margin = margin(10, 10, 10, 25),
+          panel.grid.major.x = element_blank()
         ) +
         coord_cartesian(clip = "off") +
         scale_fill_manual(

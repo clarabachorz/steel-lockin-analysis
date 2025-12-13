@@ -639,6 +639,7 @@ run_scenario_cost_andCO2value_comparison <- function(scen1, scen2, region_to_agg
                 panel.border = element_blank(),
                 panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
                 panel.grid.minor = element_blank(),
+                panel.grid.major.x = element_blank(),
                 axis.ticks = element_blank(),
                 legend.position = "right",
                 legend.title.position = "top",

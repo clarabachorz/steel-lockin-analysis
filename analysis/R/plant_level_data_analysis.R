@@ -382,7 +382,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
       x = "",
       color = "Line legend: cumulative\nCO2 emissions from 2025")
 
-  scale_factor <- 22
+  scale_factor <- 20
 
   p <- p + 
     geom_line(data = data_cumu_toplot, aes(x = factor(index), y = Emissions / scale_factor, group = Category, color = Category), linewidth = 1.3) +#, color = "black", linetype = "dashed") #+
@@ -408,6 +408,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
           ) +
     # labs(color = "Line Legend") +
     scale_x_discrete(breaks = x_breaks) +
+    theme_minimal() +
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
       text = element_text(size = 9),
       axis.title = element_text(size = 10),
@@ -530,15 +531,15 @@ plot_regional_production <- function(save_plot=FALSE){
     # geom_rect(aes(xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf), fill = "#6a6a6951", alpha = 0.15) +
     annotate("rect", xmin = 1900, xmax = 2022, ymin = 1, ymax = Inf, fill = "#6a6a6951", alpha = 0.15) +
     scale_x_continuous(breaks = seq(1900, 2050, by = 25)) +
-    theme_bw(base_size = 8) +
+    theme_minimal(base_size = 8) +
     labs(title = "Primary steel production",
         subtitle = "(historical and scenario data)",
         # x = "Year",
         y = "Primary steel production (Mt/yr)",
         colour = "Region") +
     theme(
-      # plot.title = element_text(hjust = 0.5, size = 11),
-      panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+      # panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+      panel.grid.minor = element_blank(),
       axis.title.x = element_blank()
     )
     
@@ -555,7 +556,7 @@ plot_regional_production <- function(save_plot=FALSE){
             alpha=0.4, color = col_useur, fill = "white") +
     annotate("text", x = 1940,
         y = 250,
-        label ="1st wave:\nGlobal North, \npost WW2",
+        label ="First wave:\nGlobal North, \npost WW2",
           hjust = 0.8, vjust = 0.1,
           lineheight = 0.9, size = 2.1) +
     #CHA
@@ -564,12 +565,12 @@ plot_regional_production <- function(save_plot=FALSE){
       arrow = arrow(length = unit(0.2, "cm")), 
       color = col_cha, show.legend = FALSE) +
     annotate("rect",
-            xmin= 1958, xmax=1995,
-            ymin=600, ymax=740,
+            xmin= 1955, xmax=1995,
+            ymin=590, ymax=750,
             alpha=0.4, color = col_cha, fill = "white") +
     annotate("text", x = 1990,
         y = 590,
-        label ="2nd wave:\nChina, 2000s",
+        label ="Second wave:\nChina, 2000s",
           hjust = 0.9, vjust = -0.3,
           lineheight = 0.9, size = 2.1) +
     #IND
@@ -579,11 +580,11 @@ plot_regional_production <- function(save_plot=FALSE){
       color = col_ind, show.legend = FALSE) +
     annotate("rect", 
             xmin= 1957, xmax=2005,
-            ymin=950, ymax=1260,
+            ymin=960, ymax=1260,
             alpha=0.4, color = col_ind, fill = "white") +
     annotate("text", x = 2000,
         y = 970,
-        label ="3rd wave:\nIndia, other Asia,\nLatin America,\nfrom today",
+        label ="Third wave:\nIndia, other Asia,\nLatin America,\nfrom today",
           hjust = 0.9, vjust = -0.2,
           lineheight = 0.9, size = 2.1) +
     #SSA
@@ -597,7 +598,7 @@ plot_regional_production <- function(save_plot=FALSE){
             alpha=0.4, color = col_ssa, fill = "white") +
     annotate("text", x = 2002,
         y = 1360,
-        label ="4th wave:\nSub-Saharan\nAfrica, near future",
+        label ="Fourth wave:\nSub-Saharan\nAfrica, near future",
           hjust = 0.9, vjust = -0.1,
           lineheight = 0.9, size = 2.1) +
     geom_vline(xintercept = 2022, linetype = "solid", size = 0.4 , color = "#565555") +
@@ -622,12 +623,12 @@ plot_regional_production <- function(save_plot=FALSE){
         lineheight = 0.9, size = 2.1, angle = 90) +
     #add circle annotations (1/2/3/4)
     annotate("point", x = 1904, y = 430, shape = 21, size = 5, fill = "white", color = col_useur) +
-    annotate("point", x = 1958, y = 740, shape = 21, size = 5, fill = "white", color = col_cha) +
+    annotate("point", x = 1955, y = 740, shape = 21, size = 5, fill = "white", color = col_cha) +
     annotate("point", x = 1957, y = 1240, shape = 21, size = 5, fill = "white", color = col_ind) +
     annotate("point", x = 1962, y = 1580, shape = 21, size = 5, fill = "white", color = col_ssa) +
     #add labels for circles
-    annotate("text", x = 1904, y = 445, label = "1", color = col_useur, size = 3) +
-    annotate("text", x = 1958, y = 735, label = "2", color = col_cha, size = 3) +
+    annotate("text", x = 1904, y = 435, label = "1", color = col_useur, size = 3) +
+    annotate("text", x = 1955, y = 735, label = "2", color = col_cha, size = 3) +
     annotate("text", x = 1957, y = 1235, label = "3", color = col_ind, size = 3) +
     annotate("text", x = 1962, y = 1575, label = "4", color = col_ssa, size = 3)
 
@@ -712,7 +713,7 @@ plot_capacity_additions <- function(save_plot=FALSE){
     scale_fill_manual(
       values = fill_colors,
       breaks = names(fill_colors)) +
-    theme_bw(base_size = 8) +
+    theme_minimal(base_size = 8) +
   labs(
         title = "BF-BOF capacity additions",
         subtitle = "(historical and new announcements as of\nJune 2025)",
@@ -723,8 +724,9 @@ plot_capacity_additions <- function(save_plot=FALSE){
                       limits = c(start_year,end_year)) +
     theme(
       # plot.title = element_text(hjust = 0.5, size = 11),
-      panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+      # panel.border = element_rect(color = "black", fill = NA, size = 0.5),
       axis.text.x = element_text(angle = 0),
+      panel.grid.minor = element_blank(),
       axis.title.x = element_blank()
     ) +
     geom_vline(xintercept = 2025, linetype = "solid", size = 0.4 , color = "#565555") +

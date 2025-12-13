@@ -230,11 +230,12 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
     # scale_x_discrete(labels = label_fun)+
     labs(
       title = "Breakdown of cumulative CO2 Emissions from steel production\n(2025 to 2070) and average abatement costs",
-      x = "Scenario",
       y = "Cumulative emissions\n(Gt CO2)",
       fill = "Region"
     ) +
-    theme_bw(base_size = 10)
+    theme_minimal(base_size = 10) +
+    geom_hline(yintercept = 0, colour = "white")+
+    geom_hline(yintercept = 0, colour = "#dbd8d8", linewidth = 0.3)
 
   plot_df <- plot_df %>%
     filter(period == end_year) %>%
@@ -278,7 +279,9 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
       panel.border = element_blank(),
       panel.grid.major = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
       axis.ticks = element_blank(),
+      axis.title.x = element_blank(),
       legend.position = "right",
       legend.title.position = "top",
       legend.title = element_text(hjust = 0.5),
