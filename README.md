@@ -16,7 +16,7 @@ All major operating systems can be used (Windows, MacOS or Linux), although this
 
 All required dependencies are installed automatically when running the appropriate sections of the R Markdown script: 
 ```
-plot_abatement_costs.Rmd
+plot_figures.Rmd
 ```
 No separate environment setup is required.
 ### Replicating figures
@@ -24,7 +24,7 @@ No separate environment setup is required.
 To reproduce the figures from the article:
 1. Open the R markdown file
 ```
-plot_abatement_costs.Rmd
+plot_figures.Rmd
 ```
 2. Run the section corresponding to the figure you wish to replicate. Note that some figures rely on intermediate results generated in earlier sections; if these are not available, the code will throw an error.
 
