@@ -811,7 +811,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       inherit.aes = FALSE,
       angle = 90,
       vjust = 0.5,
-      size = 2,
+      size = 2.3,
       fontface = "plain"
     ) +
     scale_fill_manual(values = present_colors) +
@@ -838,13 +838,14 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       fill = "CAPEX"
     ) +
     guides(fill = guide_legend(ncol = 1)) +
-    theme_bw(base_size = 8) +
+    theme_bw(base_size = 9) +
     coord_cartesian(clip = "off") +
     theme(
       panel.border = element_blank(),
       panel.grid.major.y = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.major.x = element_blank(),
       axis.ticks = element_blank(),
+      axis.title.x = element_blank(),
       panel.grid.minor = element_blank(),
       strip.text = element_text(face = "bold"),
       legend.position = "right",
@@ -886,13 +887,14 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
         b <- scales::breaks_extended(n=6)(c(0,lims[2]))
       },
       ) +
-    theme_bw(base_size = 8) +
+    theme_bw(base_size = 9) +
     guides(fill = guide_legend(ncol = 1)) +
     theme(
       panel.border = element_blank(),
       panel.grid.major.y = element_line(linewidth = 0.3, color = "#dbd8d8"),
       panel.grid.major.x = element_blank(),
       axis.ticks = element_blank(),
+      axis.title.x = element_blank(),
       axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, color = "black"),
       panel.grid.minor = element_blank(),
       strip.text = element_text(face = "bold"),
@@ -900,7 +902,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       legend.title.position =  "top",
       legend.margin = margin(0, 0, 0, 0),
       legend.key.size = unit(0.8,"line"),
-      plot.margin = margin(10, 15, 60, 10),
+      plot.margin = margin(10, 15, 55, 10),
       # axis.title.y = element_blank()
     )
 
@@ -909,7 +911,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
     common.legend = TRUE,
     legend = "right",
     labels = c("a", "b"), ncol = 2, nrow=1,
-    widths = c(2.5,1),
+    widths = c(2.7,1),
     font.label = list(size = 12, face = "bold")
     )
 

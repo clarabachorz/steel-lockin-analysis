@@ -204,7 +204,6 @@ plot_REMIND_steel_production <- function(mif_list, fig_name) {
         mutate(scenario = recode(scenario, !!!scen_names)) %>%
         mutate(scenario = factor(scenario, levels = c(unlist(scen_names))))
 
-    print(df_rows %>% filter(period == 2050, variable == "BF-BOF"))
     fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
         geom_bar(stat = "identity") +
         facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +

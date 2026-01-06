@@ -55,7 +55,7 @@ calc_em <- function(df) {
 }
 
 #add groups here
-region_groups <- list(
+region_groups_cascade <- list(
   "OASLAM" = c("OAS", "LAM"),
   "EUR+NEU+USA+JPN+REF+CAZ" = c("EUR", "NEU", "USA", "JPN", "REF", "CAZ")
 )
@@ -106,8 +106,8 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
   end_year <- 2070
 
   #map regions
-  region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
-                        unlist(region_groups))
+  region_map <- setNames(rep(names(region_groups_cascade), lengths(region_groups_cascade)),
+                        unlist(region_groups_cascade))
 
 
   # base_list <- list(mifdata1, mifdata2, mifdata3)
@@ -229,8 +229,8 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
             fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
     # scale_x_discrete(labels = label_fun)+
     labs(
-      title = "Breakdown of cumulative CO2 Emissions from steel production\n(2025 to 2070) and average abatement costs",
-      y = "Cumulative emissions\n(Gt CO2)",
+      title = "Breakdown of cumulative emissions from steel production\n(2025 to 2070) and average abatement costs",
+      y = expression("Cumulative emissions (Gt CO"[2]*")"),
       fill = "Region"
     ) +
     theme_minimal(base_size = 10) +
@@ -293,7 +293,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
     # add the average abatement cost labels
     geom_text(
         data = df_aac,
-        aes(x = x_pos, y = y_pos, label = paste0("$", round(fscp, 0), "\n/tCO2")),
+        aes(x = x_pos, y = y_pos, label = paste0("$", round(fscp, 0), "\n/tCO\u2082")),
         color = "#767575", size = 2.5, fontface = "bold", inherit.aes = FALSE
     )
   }
@@ -329,8 +329,8 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
     setNames(region_order, paste0(names(region_order), "_2"))
   )
 
-  region_map <- setNames(rep(names(region_groups), lengths(region_groups)),
-                        unlist(region_groups))
+  region_map <- setNames(rep(names(region_groups_cascade), lengths(region_groups_cascade)),
+                        unlist(region_groups_cascade))
                         
   mainscens_df_emi_notcumu <- miflist %>%
     map_dfr(calc_em)

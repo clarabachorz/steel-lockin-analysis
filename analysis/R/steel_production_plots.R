@@ -1,0 +1,232 @@
+# Importing libraries.
+
+library(dplyr)
+require(tidyverse)
+require(ggplot2)
+library(gridExtra)
+library(grid)
+library(purrr)
+library(ggpubr)
+
+library(quitte)
+library(mip)
+
+
+### Define helper functions
+
+# Function for creating a sample of a dataframe (helpful for quick inspection).
+show_sample <- function (df, nr=10) {
+    return(df[sample(nrow(df), nr), ])
+}
+
+dpi <- 300
+
+# Functions for calculating sizes of figures (converting mm and pt to inch).
+
+pt <- function (x) {
+    return(x / 72)
+}
+mm <- function (x) {
+    return(x * 0.0393700787)
+}
+
+# Function for exporting image to various formats with correct size and resolution.
+
+write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
+    for (f in formats) {
+        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps')) {
+            stop(paste0('Unknown format', f))
+        }
+        path <- paste0("./figs/", name, ".", f)
+        ggsave(path, plot = fig, width = width, height = height, dpi = dpi, create.dir = TRUE)
+    }
+}
+
+
+## Process data before custom plotting
+
+
+# We perform the following actions on the data before plotting it manually:
+
+# We map the 12 regions onto 6 regions.
+# We simplify the variables by stripping of the `Production|Industry|Steel|+|` bit in the front.
+# We reduce periods to relevant ones for plotting.
+# We obtain the colour codes from MIP.
+
+region_groups <- list(
+    CHA="China",
+    IND="India",
+    CAZ="Global North",
+    EUR="Global North",
+    JPN="Global North",
+    LAM="Lat. America &\nOth. Asia",
+    MEA="Middle East &\nNorth. Africa",
+    NEU="Global North",
+    OAS="Lat. America &\nOth. Asia",
+    REF="Global North",
+    SSA="Sub-Saharan Africa",
+    USA="Global North",
+    World="World"
+)
+
+#function for loading scenario data
+
+load_mif_data <- function(mif_list) {
+    df_data <- bind_rows(mif_list) %>% filter(grepl("Production|Industry|Steel|+", variable, fixed = TRUE))
+    plotstyle(as.character(unique(df_data$variable)))
+    df_plot <- (
+        df_data %>%
+        mutate(region = recode(region, !!!region_groups)) %>%
+        group_by(model, scenario, region, period, variable, unit) %>%
+        summarise(value = sum(value)) %>%
+        mutate(variable = sub("Production|Industry|Steel|+|", "", variable, fixed = TRUE)) %>%
+        filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070))
+    )
+
+    # Sort variable by custom order.
+    df_plot$variable <- factor(df_plot$variable, levels = c('SCRAP-EAF', 'DRI-H2-EAF', 'DRI-NG-EAF-CCS', 'DRI-NG-EAF', 'BF-BOF-CCS', 'BF-BOF'))
+
+    return(df_plot)
+}
+
+
+## Create new plot for Fig. 3
+
+
+## We create Figure 3 by combining one stacked-bar plot for the World with a 
+## facet of stacked-bar plots for the other regions in a grid.
+
+bar_spacing <- 0.5
+bar_width_single <- 5 - bar_spacing
+bar_width_double <- 10 - bar_spacing
+
+scen_names <- list(
+    "Current policies" = "Current Policies",
+    "Transition with lock-in" = "Transition with\nlock-in",
+    "Fast transition" = "Fast transition"
+)
+
+
+custom_colors <- c(
+    "SCRAP-EAF"         = "#ffb200",  # secondary / EAF
+    "DRI-H2-EAF"        = "#66cccc",  # DRI + H2
+    "DRI-NG-EAF-CCS"    = "#e5e5b2",  # DRI NG + CCS
+    "DRI-NG-EAF"        = "#999959",  # DRI NG
+    "BF-BOF-CCS"        = "#b2b2b2",  # BF-BOF + CCS
+    "BF-BOF"            = "#0c0c0c"   # BF-BOF
+    )
+
+ylab <- "Annual steel production (Mt/year)"
+
+
+
+plot_stacked_production_plots <- function(mif_list) {
+
+    df_plot <- load_mif_data(mif_list)
+
+    regs <- c("World", "China", "India")
+    plotstyle(as.character(unique(df_plot$variable)))
+    for (f in c("Figure3", "FigureED2")) {
+        if (f == "Figure3") {
+            df_rows <- df_plot %>% filter(region %in% regs)
+            df_rows$region <- factor(df_rows$region, levels = regs)
+        } else {
+            df_rows <- df_plot %>% filter(!region %in% regs)
+        }
+        df_rows <- df_rows %>% mutate(scenario=unlist(scen_names)[scenario])
+        df_rows$scenario <- factor(df_rows$scenario, levels = c(unlist(scen_names)))
+
+        # add panel letters
+        panel_keys <- df_rows %>%
+            group_by(region) %>%
+            summarise(period = min(as.numeric(period)), .groups = "drop") %>%
+            arrange(region) %>%
+            mutate(panel_label = letters[seq_len(n())], "")
+
+        fig <- ggplot(df_rows, aes(x = scenario, y = value, fill = variable)) +
+            geom_bar(stat = "identity") +
+            facet_grid(rows=vars(region), cols=vars(period), scales = "free_y") +
+            #uncomment to add panel keys
+            geom_text(
+            data = panel_keys,
+            mapping = aes(x = -Inf, y = Inf, label = panel_label),
+            inherit.aes = FALSE,
+            hjust = 6, vjust = -0.5,
+            size = 4.5, fontface = "bold",
+            colour = "black"
+            ) +
+            labs(title = NULL, x = NULL, y = ylab) +
+            theme_minimal() +
+            theme(
+            axis.text.x = element_text(size = 7, angle = 90),
+            axis.text.y = element_text(size = 7),
+            axis.title.y = element_text(size = 9),
+            strip.text.x = element_text(size = 8),
+            strip.text.y = element_text(size = 8),
+            legend.title = element_text(size = 8),
+            legend.text = element_text(size = 7),
+            legend.position = "bottom",
+            legend.key.height = unit(10, "mm"),
+            plot.margin = margin(10, 10, 10, 25),
+            panel.grid.major.x = element_blank()
+            ) +
+            coord_cartesian(clip = "off") +
+            scale_fill_manual(
+                values = custom_colors,
+                name = NULL,
+                labels = c(
+                    "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+                    "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+                    "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage\n(DRI-NG-EAF-CCS)",
+                    "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+                    "Primary steel using a blast furnace and\na basic oxygen furnace with carbon\ncapture and storage (BF-BOF-CCS)",
+                    "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF). For\nIndia, this includes existing\ncoal-based DRI production."
+                ),
+            )
+        write_images(fig, f, height = mm(180))
+    }
+}
+
+
+plot_area_production_plots <- function(mif_list) {
+
+    df_plot <- load_mif_data(mif_list)
+
+    plotstyle(as.character(unique(df_plot$variable)))
+    
+    # stacked area plot for World, for the three scenarios
+    world_df <- df_plot %>%
+    filter(region == "World", scenario %in% names(scen_names)) %>%
+    mutate(
+        scenario_short = unlist(scen_names)[scenario],
+        scenario_short = factor(scenario_short, levels = unlist(scen_names))
+    )
+
+    area_world <- ggplot(world_df, aes(x = period, y = value, fill = variable, group = variable)) +
+    geom_area(position = "stack", colour = NA) +
+    facet_wrap(~ scenario_short, nrow = 1) +
+    scale_fill_manual(
+        values = custom_colors,
+        name = NULL,
+        labels = c(
+                    "Secondary steel using an electric arc\nfurnace (SCRAP-EAF)",
+                    "Primary steel using direct reduction of iron\nwith hydrogen and an electric arc furnace\n(DRI-H2-EAF)",
+                    "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\nwith carbon capture and storage\n(DRI-NG-EAF-CCS)",
+                    "Primary steel using direct reduction of iron\nwith natural gas and an electric arc furnace\n(DRI-NG-EAF)",
+                    "Primary steel using a blast furnace and\na basic oxygen furnace with carbon\ncapture and storage (BF-BOF-CCS)",
+                    "Primary steel using a blast furnace and\na basic oxygen furnace (BF-BOF)"
+                ),
+                ) +
+    scale_x_continuous(breaks = seq(2025,2070,5)) +
+    labs(title = "Global steel production",
+        x = NULL, y = ylab) +
+    theme_minimal(base_size = 9) +
+    theme(
+        legend.position = "bottom",
+        axis.text.x = element_text(size = 7, angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        strip.text = element_text(size = 9)
+    )
+
+    write_images(area_world, "FigureED1", width = mm(180), height = mm(100))
+}
