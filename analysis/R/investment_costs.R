@@ -925,6 +925,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
       plot = combined_plot,
       width = 180, height = 90, unit = "mm")
   }
+  show(combined_plot)
 }
 
 
@@ -989,4 +990,5 @@ plot_invst_fossil <- function(df.totalcosts, region_to_plot = "IND", save_plot =
       plot = region_plot,
       width = 180, height = 90, unit = "mm")
   }
+  show(region_plot)
 }

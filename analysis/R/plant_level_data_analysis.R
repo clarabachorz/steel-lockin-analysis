@@ -475,6 +475,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
     ggsave("figs/Figure2.png", width = 180, height = 140, units = "mm", dpi = 300)
     ggsave("figs/Figure2.svg", width = 180, height = 140, units = "mm")
   }
+  show(p)
 }
 
 plot_regional_production <- function(save_plot=FALSE){
@@ -778,6 +779,7 @@ plot_combine_production_and_cap_additions <- function(save_plot=FALSE){
     ggsave("figs/Figure1.png", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
     ggsave("figs/Figure1.svg", combined_plot, width = 180, height = 100, units = "mm")
   }
+  show(combined_plot)
 }
 
 plot_BFBOF_age_distribution <- function(save_plot=FALSE){
@@ -897,7 +899,7 @@ plot_BFBOF_age_distribution <- function(save_plot=FALSE){
             xmax=unique(age_group_positions[plot_data_long$Age_Group == "70-74"])+0.4,
             ymin=0, ymax=Inf, alpha=0.4, fill="#e7ab04")+
     geom_bar(stat = "identity") +
-    geom_line(aes(y = Cumu_BOF_capacity_percent * max_capacity / 100, group = 1, color = "Cumulative Capacity"), size = 1) +
+    geom_line(aes(y = Cumu_BOF_capacity_percent * max_capacity / 100, group = 1, color = "Cumulative Capacity"), linewidth = 1) +
     annotate("text", x = "50-54", y = max_capacity * 1.1,
             label = "Post-WW2 BF-BOF\nsurge, driven by Europe,\nJapan, Russia and\nex-USSR countries",
             color = "black", size = 3.5, hjust = 0.1, vjust = 0.2) +
@@ -928,6 +930,7 @@ plot_BFBOF_age_distribution <- function(save_plot=FALSE){
   if(save_plot){
     ggsave("figs/BOF_age_distribution_plot_wregions.png", width = 10, height = 6, dpi = 300)
   }
+  show(p)
 }
 
 
@@ -995,7 +998,7 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
 
   p <- ggplot() +
     geom_line(data=df_plot_capacity,
-              aes(x=Year, y=value, colour=Region,linetype = segment), size = 1) +
+              aes(x=Year, y=value, colour=Region,linetype = segment), linewidth = 1) +
     scale_linetype_manual(values = c("Historical capacity" = "solid", "New announcements" = "111111", "Scenario data" = "1343")) +
     scale_color_manual(
       values = fill_colors,

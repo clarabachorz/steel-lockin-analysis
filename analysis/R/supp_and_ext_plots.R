@@ -402,5 +402,5 @@ plot_energy_prices <- function(mif_list, var, var_name, fig_name) {
         ))
 
     write_images(fig, fig_name, height = mm(140))
-    # show(fig)
+    show(fig)
 }

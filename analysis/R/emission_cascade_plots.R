@@ -20,8 +20,7 @@ calc_cumuem <- function(df, region_to_calculate) {
   df %>%
     filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
                 # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
-                 variable,
-                 ignore.case = TRUE, 
+                 variable, 
                  fixed = TRUE)) %>%
     # filter(between(period, 2025, 2070),
     filter(between(period, 2025, 2080),
@@ -43,7 +42,6 @@ calc_em <- function(df) {
     filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
                 # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
                  variable,
-                 ignore.case = TRUE, 
                  fixed = TRUE)) %>%
     # filter(between(period, 2025, 2070),
     filter(between(period, 2025, 2080)) %>%
@@ -318,6 +316,7 @@ combine_cascade_cumueum_and_co2value_plot <- function(mif_list, df_aac_combined,
   # p_combined
   ggsave("./figs/Figure4.png", p_combined, width = 180, height = 180, units = "mm")
   ggsave("./figs/Figure4.svg", p_combined, width = 180, height = 180, units = "mm")
+  show(p_combined)
 }
 
 plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {

@@ -1,4 +1,9 @@
-# Notebook: replicating Article figures for "Averting the steel carbon lock-in through strategic green investments"
+---
+title: "Notebook: replicating article figures for \"Averting the steel carbon lock-in through strategic green investments\""
+author: "Clara Bachorz"
+output: html_document
+---
+
 
 In this notebook, we replicate the figures and analyses shown in the paper.
 
@@ -136,7 +141,7 @@ to plot the figures.
 ### Run Python script to calculate historical and future BOF capacity additions from GEM data
 This is used to generate the files in the folder ./inputdata/gem, which are used to plot Figures 1 and 2. 
 This cell does not need to be ran, unless changes have been made to eg. relining cycle time assumptions (defined in main()). 
-```{r run python}
+```{r run python, eval = FALSE}
 # install python dependencies if not done already
 if (!file.exists("analysis/python/.venv")) {
   message("Setting up Python environment...")
@@ -158,7 +163,7 @@ plant lifetime. Eg. the average LCO for a BF-BOF plant that is built in 2030 in 
 "Weighted" means that the individual LCOs for each production pathway (BF-BOF, H2-DRI-EAF ...)
 are weighted by their yearly production to reach a weighted average LCO for each year and region.
 This is the metric that is used to calculate average abatement costs (see abatement_costs.R).
-```{r calc and plot LCO}
+```{r calc and plot LCO, eval = FALSE}
 # calculates the levelized cost of steel for all scenarios.
 # this is then used for the abatement cost calculation
 # (saved under the filenames lcop_avg_*)
@@ -191,7 +196,7 @@ for (scen in scenarios_for_lcop){
 ## Plot Figures 1 and 2
 Plot the processed GEM data to get Figure 1 (primary steel production + capacity additions) and Figure 2 
 (estimating the steel fossil lock-in).
-```{r plot plant level data}
+```{r plot plant level data, fig.width=18/2.54, fig.height=12/2.54}
 # plot regional production data (historical and scenario data) and
 # capacity additions (historical and recent announcements)
 plot_combine_production_and_cap_additions(save_plot = TRUE)
@@ -204,7 +209,7 @@ plot_emissions_1relining(save_plot = TRUE)
 ## Plot Figure 3
 The chunk below includes different steel production plots (by route) from REMIND scenario results.
 
-```{r}
+```{r plot steel production data, fig.height = 18/2.54, fig.width = 18/2.54}
 # Plot Figure 3 and Figure ED2
 plot_stacked_production_plots(mif_list)
 
@@ -278,7 +283,7 @@ This is compared to the value of the additional CO2 abated (calculated using CO2
 
 Then, we combine this plot (`p_scenariocost_vs_co2value`) with the emission cascade using `combine_cascade_cumueum_and_co2value_plot`. 
 
-```{r plot cumulative emissions cascade}
+```{r plot cumulative emissions cascade, fig.height = 18/2.54, fig.width = 18/2.54}
 
 # Make Fig 4b: scenario additional costs vs co2 value
 df <- run_scenario_cost_andCO2value_comparison(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
@@ -296,7 +301,7 @@ combine_cascade_cumueum_and_co2value_plot(mif_list, df_aac_combined, p_scenarioc
 ## Plot Figure 5: Investments required in India in the different scenarios
 
 We also plot Figure ED4 in this code block: the remaining expenditure required from other fuels (fossil gas, biogas, fossil coal, biomass solids).
-```{r calc investment costs}
+```{r calc investment costs, fig.height = 9/2.54, fig.width = 18/2.54}
 ## calculate total investment costs for all scenarios and regions
 df.totalcosts <- combine_investment_costs(scenarios)
 

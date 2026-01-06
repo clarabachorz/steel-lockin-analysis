@@ -59,7 +59,7 @@ summarise_lcop_total <- function(df) {
 get_total_production <- function(df) {
     df %>%
         filter(grepl("Production|Industry|Steel|+",
-                    variable, ignore.case = TRUE, fixed = TRUE)) %>%
+                    variable, fixed = TRUE)) %>%
         filter(unit == "Mt/yr") %>%
         filter(between(period, 2025, 2075)) %>%
         mutate(variable = gsub("Production|Industry|Steel|+", "", variable)) %>%
@@ -82,7 +82,7 @@ get_total_production <- function(df) {
 get_total_emissions <- function(df) {
     df %>%
         filter(grepl("Emi|CO2|Energy|Demand|Industry|Steel|+",
-                    variable, ignore.case = TRUE, fixed = TRUE)) %>%
+                    variable, fixed = TRUE)) %>%
         filter(between(period, 2025, 2075)) %>%
         select(-model) %>%
         group_by(period, region) %>%
@@ -157,9 +157,9 @@ calc_demand_adjustment <- function(scenario1_mif, scenario2_mif, scenario2_prod,
     # Calculate average price (USD/t) for each period and region
     avg_price <- scenario1_mif %>%
         mutate(scenario = "Scenario1") %>%
-        filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+        filter(grepl("CES Function|CES Price|ue_steel_primary", variable, fixed = TRUE)) %>%
         bind_rows(scenario2_mif %>%
-                    filter(grepl("CES Function|CES Price|ue_steel_primary", variable, ignore.case = TRUE, fixed = TRUE)) %>%
+                    filter(grepl("CES Function|CES Price|ue_steel_primary", variable, fixed = TRUE)) %>%
                     mutate(scenario = "Scenario2")) %>%
         filter(between(period, 2025, 2075)) %>%
         select(-model, -unit) %>%

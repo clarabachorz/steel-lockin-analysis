@@ -184,6 +184,7 @@ plot_stacked_production_plots <- function(mif_list) {
                 ),
             )
         write_images(fig, f, height = mm(180))
+        show(fig)
     }
 }
 
@@ -229,4 +230,5 @@ plot_area_production_plots <- function(mif_list) {
     )
 
     write_images(area_world, "FigureED1", width = mm(180), height = mm(100))
+    show(area_world)
 }
