@@ -26,11 +26,12 @@ To reproduce the figures from the article:
 ```
 plot_figures.Rmd
 ```
-2. Run the section corresponding to the figure you wish to replicate. Note that some figures rely on intermediate results generated in earlier sections; if these are not available, the code will throw an error.
-
+2. Run the section corresponding to the figure you wish to replicate. Note that some figures rely on intermediate results generated in earlier sections; if these are not available, the code will throw an error. It is preferable to run the entire markdown file to avoid such errors.
+   
+The full analysis should take under 5 minutes. The figures should then be available in the `figs` folder.
 ## Input data structure
 
-The Global Energy Monitor *Iron and Steel Plant Tracker* data (July 2025 release) is stored in `inputdata/python_source`. The folder includes a correction table for some missing data in the original files, which was found directly on the [GEM Wiki](https://www.gem.wiki/Main_Page). 
+The Global Energy Monitor *Iron and Steel Plant Tracker* data (March 2025 release) is stored in `inputdata/python_source`. The folder includes a correction table created by the authors of this software: some data was found to be missing from the original files, but was available on the [GEM Wiki](https://www.gem.wiki/Main_Page). 
 This data was then analysed using the python source code (`analysis/python`), and the output was saved in `inputdata/gem`. 
 
 The REMIND model provides scenario results under two file formats, raw (.gdx) and processed (.mif). Both types are used in the analysis code, and the corresponding scenario data can be found under `inputdata/gdx` and `inputdata/mif`.
