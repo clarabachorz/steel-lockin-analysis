@@ -404,3 +404,136 @@ plot_energy_prices <- function(mif_list, var, var_name, fig_name) {
     write_images(fig, fig_name, height = mm(140))
     show(fig)
 }
+
+
+plot_em_diff_by_sector <- function(mif_list, fig_name){
+
+    df_data <- bind_rows(mif_list) %>%
+        filter(scenario != "TransitionwLockIn-NPi") %>%
+        # filter(grepl("Emi|CO2|+|", variable, fixed = TRUE)|grepl("Emi|CO2|CDR|+|", variable, fixed = TRUE))
+        filter(
+            grepl("Emi|CO2|Gross|Energy|Demand|+|", variable, fixed = TRUE)|
+            grepl("Emi|CO2|Gross|Energy|Supply|+|", variable, fixed = TRUE)|
+            grepl("Emi|CO2|Gross|Waste", variable, fixed = TRUE)|
+            grepl("Emi|CO2|CDR|+|", variable, fixed = TRUE)|
+            grepl("Emi|CO2|+|Industrial Processes", variable, fixed = TRUE)|
+            grepl("Emi|CO2|+|Land-Use Change", variable, fixed = TRUE)) %>%
+        #avoid double counting of land-use change emissions by removing the CDR fraction
+        filter(!variable %in% c("Emi|CO2|CDR|+|Land-Use Change"))
+        # filter(grepl("Emi|CO2|+|", variable, fixed = TRUE))
+
+    df_total_test <- df_data %>%
+        group_by(model, scenario, region, period) %>%
+        summarise(value = sum(value))
+
+    # test: if all components have been accounted for, df_total_test should be the same as "Emi|CO2"
+    df_co2_total <- bind_rows(mif_list) %>%
+        filter(scenario != "TransitionwLockIn-NPi") %>%
+        filter(variable == "Emi|CO2")
+    
+    df_co2_total <- df_co2_total %>%
+        left_join(df_total_test, by = c("model", "scenario", "region", "period"), suffix = c("_co2", "_components")) %>%
+        mutate(diff = value_co2 - value_components) %>%
+        select(- model, - variable, -unit)
+
+    # raise warning if difference is above 1e-3 (there can be some small rounding errors)
+    if (any(abs(df_co2_total$diff) > 1e-3, na.rm = TRUE)) {
+        warning("Aggregated components do not sum to 'Emi|CO2' for some cases! Max diff: ",
+            signif(max(abs(df_co2_total$diff), na.rm = TRUE), 3))
+}
+    
+    #aggregate variables intro groups
+    df_data <- df_data %>%
+        mutate(
+            variable_group = case_when(
+                variable %in% c(
+                    "Emi|CO2|Gross|Energy|Supply|+|Electricity",
+                    "Emi|CO2|Gross|Energy|Supply|+|Gases",
+                    "Emi|CO2|Gross|Energy|Supply|+|Heat",
+                    "Emi|CO2|Gross|Energy|Supply|+|Hydrogen",
+                    "Emi|CO2|Gross|Energy|Supply|+|Liquids",
+                    "Emi|CO2|Gross|Energy|Supply|+|Solids"
+                ) ~ "Energy supply",
+                variable %in% c(
+                    "Emi|CO2|CDR|+|DACCS",
+                    "Emi|CO2|CDR|+|EW",
+                    "Emi|CO2|CDR|+|Materials",
+                    "Emi|CO2|CDR|+|OAE",
+                    "Emi|CO2|CDR|+|Synthetic Fuels CCS"
+                ) ~ "Other CDR",
+                variable %in% c(
+                    "Emi|CO2|Gross|Waste",
+                    "Emi|CO2|Gross|Energy|Demand|+|CDR Sector",
+                    "Emi|CO2|+|Industrial Processes",
+                    "Emi|CO2|+|Land-Use Change"
+                ) ~ "Other",
+                variable %in% c("Emi|CO2|CDR|+|BECCS") ~ "BECCS",
+                variable %in% c("Emi|CO2|Gross|Energy|Demand|+|Buildings") ~ "Buildings",
+                variable %in% c("Emi|CO2|Gross|Energy|Demand|+|Transport") ~ "Transport",
+                variable %in% c("Emi|CO2|Gross|Energy|Demand|+|Industry") ~ "Industry",
+                TRUE ~ as.character(variable)
+            )
+        )
+
+
+    df_plot <- df_data %>%
+        mutate(region = recode(region, !!!region_groups)) %>%
+        group_by(model, scenario, region, period, variable_group) %>%
+        # sum emissions for every group of countries
+        summarise(value = sum(value)) %>%
+        filter(period %in% c(2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2070)) %>%
+        filter(region == "World")
+
+    # Spread scenarios to columns to compute difference
+    df_wide <- df_plot %>%
+        select(region, period, variable_group, value, scenario) %>%
+        pivot_wider(names_from = scenario, values_from = value)
+
+    # Calculate difference: FastTransition - TwLI
+    df_wide <- df_wide %>%
+        mutate(diff = `TransitionwLockIn-PkBudg820` - `FastTransition-PkBudg820` )
+
+    # Prepare for plotting
+    df_long <- df_wide %>%
+        select(region, period, variable_group, diff) %>%
+        mutate(variable_group = factor(variable_group, levels = c("Industry","BECCS","Other CDR","Other",  "Transport", "Buildings","Energy supply")))
+
+
+
+    max_y <- max(df_long$diff, na.rm = TRUE) *1.2
+    min_y <- - max_y
+    x_pos <- as.numeric(factor(df_long$period))[which.max(df_long$diff)] # or just pick a suitable x
+
+    # Plot
+    fig <- ggplot(df_long, aes(x = factor(period), y = diff, fill = variable_group)) +
+    # fig <- ggplot(df_plot, aes(x = factor(period), y = value, fill = variable)) +
+        geom_bar(stat = "identity") +
+        # facet_wrap(~ region, ncol = 2) +
+        labs(
+            x = "",
+            y = "Emissions [Mt CO2/year]",
+            fill = "Sector",
+            title = "Emissions difference by sector between TwLi and FT"
+        ) +
+        theme_minimal(base_size = 10) +
+        scale_fill_viridis_d(option = "inferno") +
+        guides(
+            fill = guide_legend(ncol = 1)) +
+        theme(
+            axis.text.x = element_text(angle = 0),
+            legend.position = "right",
+            # legend.text. = element_text(size = 6),
+            legend.title.position = "top"
+        ) +
+        annotate("segment", x = 1, xend = 1, y = 5, yend = max_y, 
+                arrow = arrow(length = unit(0.1, "inches")), color = "#818181") +
+        annotate("text", x = 1.2, y = max_y * 0.95, label = "Sector emissions are\nhigher in TwLI", hjust = 0, vjust = 1, size = 3.5, color = "#818181") +
+        annotate("segment", x = 1, xend = 1, y = -5, yend = min_y, 
+                arrow = arrow(length = unit(0.1, "inches")), color = "#818181") +
+        annotate("text", x = 1.2, y = min_y * 0.95, 
+                label = "Sector emissions are lower or\nthere are more negative emissions\n(CDR/BECCS) in TwLI", 
+                hjust = 0, vjust = 0, size = 3.5, color = "#818181")
+
+    write_images(fig, fig_name, height = mm(140))#, height = mm(140))
+    show(fig)
+}

@@ -365,8 +365,13 @@ mif_list <- lapply(scenarios, function(scen) {
 plot_co2_prices(mif_list, fig_name = "FigureS4")
 
 
+## Other Supp Figs: energy prices for the main scenarios
 plot_energy_prices(mif_list, "Price|Final Energy|Industry|Solids|Rawdata", "Solid fuel", fig_name = "FigureS5")
 plot_energy_prices(mif_list, "Price|Final Energy|Industry|Gases|Rawdata", "Gaseous fuel (excl. hydrogen)\n", fig_name = "FigureS6")
 plot_energy_prices(mif_list, "Price|Final Energy|Industry|Hydrogen|Rawdata", "Hydrogen", fig_name = "FigureS7")
 plot_energy_prices(mif_list, "Price|Final Energy|Industry|Electricity|Rawdata", "Electricity", fig_name = "FigureS8")
+
+
+# Supp Fig: which sector abates additional emissions in TwLI relative to FT
+plot_em_diff_by_sector(mif_list, fig_name = "FigureS9")
 ```
