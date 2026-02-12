@@ -63,12 +63,14 @@ scen_names <- list(
     "TransitionwLockIn-PkBudg820" = "TwLI",
     "TransitionwLockIn-PkBudg650" = "Transition w lock-in (1.5C,\nlow overshoot)",
     "TransitionwLockIn-PkBudg1000" = "Transition w lock-in (2°C)",
+    "TransitionwLockIn_40yrBFBOF-PkBudg820" = "TwLI (40yr BF-BOF)",
     "FastTransition-PkBudg820" = "Fast transition",
     "FastTransition-PkBudg1000" = "Fast transition (2°C)",
     "FastTransition-PkBudg650" = "Fast transition (1.5C,\nlow overshoot)",
     "TransitionwLockIn_highCCSinjecrate-PkBudg820" = "TwLI (moreCCS)",
     "TransitionwLockIn_lowBio-PkBudg820" = "TwLI (LowBio)",
-    "TransitionwLockIn_lowBio_highCCSinjecrate-PkBudg820" = "TwLI (moreCCS & LowBio)"
+    "TransitionwLockIn_lowBio_highCCSinjecrate-PkBudg820" = "TwLI (moreCCS & LowBio)",
+    "FastTransition_40yrBFBOF-PkBudg820" = "Fast Transition (40yr BF-BOF)"
 )
 
 write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
@@ -199,7 +201,7 @@ plot_REMIND_steel_production <- function(mif_list, fig_name) {
 
     # Sort variable by custom order.
     df_plot$variable <- factor(df_plot$variable, levels = c('SCRAP-EAF', 'DRI-H2-EAF', 'DRI-NG-EAF-CCS', 'DRI-NG-EAF', 'BF-BOF-CCS', 'BF-BOF'))
-    
+
     df_rows <- df_plot %>%
         mutate(scenario = recode(scenario, !!!scen_names)) %>%
         mutate(scenario = factor(scenario, levels = c(unlist(scen_names))))

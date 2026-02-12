@@ -507,6 +507,181 @@ calc_total_investments <- function(gdx) {
 }
 
 
+calc_cash_flows_wacc_sensitivity <- function(gdx) {
+  # Calculate required annual cash flows given different wacc (cost of capital) parameters 
+  # only works for the short term (up to 2050-2055) as we do not account for lifetime of investments
+
+  # initialize useful sets
+  tePrc <- readGDX(gdx,"tePrc")
+  tePrcAll <- tePrc
+
+  tePrc2opmoPrc <- as.data.frame(readGDX(gdx,"tePrc2opmoPrc")) %>% 
+    rename(all_te = tePrc)
+
+  entyFE <- as.vector(readGDX(gdx, name="entyFE"))
+
+  t <- readGDX(gdx,"ttot")
+  t <- as.numeric(t[t >= 2010 & t <= 2100])
+
+  # get yearly production, Gt/a. outflowPrc (2005) is the avg production between 2002.5 and 2007.5
+  df.outflowPrc <- as.quitte(readGDX(gdx, "vm_outflowPrc", field = "l", restore_zeros = F)[,t,]) %>%
+    filter(all_te %in% tePrcAll) %>%
+    select(region, period, all_te, value, opmoPrc) %>%
+    rename(outflowPrc = value)
+
+  # get capacity additions (yearly capacity additions).
+  df.deltacap <- as.quitte(readGDX(gdx, "vm_deltaCap", field = "l", restore_zeros = F)[,t,]) 
+
+  # we use this for all steel technologies, except for primary eafs, which need to be deduced from the steel production of this route.
+
+  # delta cap(2030) corresponds to the yearly capacity additions between 2026 and 2030. No re-indexing of values needed:
+  # this is consistent with the different definition of outflowPrc (which is over 2027.5 to 2032.5), as long as we consider
+  # all capacity additions to come online in the middle of the time step.
+  df.deltacap_steel <- df.deltacap %>%
+    filter(all_te %in% tePrcAll) %>%
+    select(region, period, all_te, value) %>%
+    rename(deltacap = value) %>%
+    group_by(region, all_te) %>%
+    arrange(period) %>%
+    # we use the total additions over the entire 5 yr time step.
+    # in the last part of the code, this is divided by 5 to get yearly costs
+    mutate(deltacap = 5 * deltacap) %>%
+    ungroup() %>%
+    # after 2050, we have 10 year time steps and we are beyond the standard lifetime
+    # of the electrolysers and solar PV,
+    # and the calculation is not applicable anymore so we remove those values here to not be confused later
+    filter(period < 2060)
+  
+  #get steel capacity factors
+  df.capfac_steel <- as.quitte(readGDX(gdx, "vm_capFac", field = "l", restore_zeros = F)[,t,]) %>%
+    filter(all_te %in% tePrc) %>%
+    select(region, period, all_te, value) %>%
+    rename(capfac = value)
+
+  # in USD/t capacity
+  df.CAPEX_steel <- as.quitte(readGDX(gdx, "vm_costTeCapital", field = "l", restore_zeros = F)[,t,tePrcAll]) %>%
+      select(region, period, all_te, value) %>%
+      filter(all_te %in% c("idr", "eaf", "bf", "bof", "bfcc")) %>%
+      rename(capex = value)
+
+  ## CALC STEEL CAPEX
+
+  # get yearly production, Gt/a. outflowPrc (2005) is the avg production between 2002.5 and 2007.5
+  # only calculate eaf primary additions
+  df.outflowPrc_eaf <- df.outflowPrc %>%
+    filter(all_te == "eaf", opmoPrc == "PRI") %>%
+    # for consistency with the other deltacap df
+    filter(period < 2060) %>%
+    select(region, period, outflowPrc) %>%
+    rename(totaldem = outflowPrc)
+
+  # REMIND also provide a deltaCap (capacity additions) variable. 
+  # But this gives no detail on the operation mode 
+  # (eg. whether an eaf is for primary or secondary steel)
+  # since we want to calculate the capacity additions for each mode,
+  # we derive capacity additions from the production (outflowPrc) and the capacity factor,
+  # ONLY for primary eafs (these are scaling up from 2020, so we can calculate this reliably until ~2045,
+  # when the plants start retiring).
+  # We then subtract these from the total eaf capacity additions
+  df.deltacap_eaf <- calculate_required_deltacap(df.outflowPrc_eaf, df.capfac_steel %>% filter(all_te == "eaf") %>% select(-all_te)) %>%
+    # add columns to be consistent with the other deltacap df
+    mutate(all_te = "eaf", opmoPrc = "PRI")
+
+  # need to substract the eaf primary additions from the total eaf additions (to derive the secondary eaf investments)
+  df.deltacap_all <- calculate_final_cap_additions_steel(df.deltacap_steel, df.deltacap_eaf)
+
+  df.Inv_steel_all <- df.deltacap_all %>%
+    # mutate(component = paste0("Steel CAPEX (", all_te, "-", opmoPrc, ")") ) %>%
+    mutate(component = case_when(
+      all_te == "eaf" & opmoPrc == "sec" ~ "EAF (secondary)",
+      all_te == "eaf" & opmoPrc == "PRI" ~ "DRI-EAF",
+      all_te == "idr" ~ "DRI-EAF",
+      all_te == "bfcc" ~ "BF CC retrofit",
+      all_te == "idrcc" ~ "DRI CC retrofit",
+      all_te == "bf" | all_te == "bof" ~ "BF-BOF",
+      TRUE ~ NA_character_
+    )) %>%
+    left_join(df.CAPEX_steel, by = c("region","period", "all_te")) %>%
+    mutate(value = deltacap * capex) %>%
+    select(region, period, value, all_te, component) %>%
+    group_by(region, period, component) %>%
+    summarise(value = sum(value)) %>% 
+    ungroup()
+
+  #check that the calculated capacity additions match the REMIND values
+  test_deltacap_calculation(df.deltacap_steel, df.deltacap_all)
+
+  ### Total investments over one time step (e.g period = 2025, total investments between 2021 and 2025)
+  df.total_Inv <- df.Inv_steel_all %>%
+    #make value yearly cost. 
+    #Only works up to 2060, afterwards model takes 10 yr time steps
+    #but this estimation is also only valid up to 2050/2055
+    filter(period <= 2055, period >= 2020) %>%
+    # focus on DRI-EAF for this section
+    filter(component == "DRI-EAF")
+
+  #select 4 wacc sensitivities
+  wacc_vec <- c(0.05, 0.08, 0.12, 0.15)
+  lifetime <- readGDX(gdx, name="pm_data", restore_zeros = F)[,,"lifetime"][,,tePrcAll][,,"lifetime"]
+
+  df.discFac <- as.quitte(lifetime) %>%
+      select(region, all_te, value) %>%
+      rename(lifetime = value) %>%
+      # idr and eaf have the same discount factro (same lifetime)
+      filter(all_te == "idr") %>%
+      mutate(component = "DRI-EAF") %>%
+      crossing(wacc = wacc_vec) %>%
+      mutate(
+        discFac = wacc * (1 + wacc)^lifetime / ((1 + wacc)^lifetime - 1)
+      ) %>%
+      select(region, component, lifetime, wacc, discFac)
+
+  df.total_Inv_long <- df.total_Inv %>%
+    left_join(df.discFac, by = c("region", "component")) %>%
+    # multiply the investment in year x by the discount rate to get the annualized 
+    mutate(
+      annual_payment_period = value * discFac,
+      end_lifetime = period + lifetime) %>%
+    select(region, period, lifetime, wacc, discFac, annual_payment_period, end_lifetime)
+
+  #timestep period
+  period_len <- 5L
+
+  # Long format: one row per (region, period, tech, scenario)
+  df_long <- df.total_Inv_long %>%
+    mutate(
+      # interpret "period" as the END year of the 5-year block:
+      start_year = period - (period_len - 1L),  # e.g. 2030 -> 2026
+      end_year   = end_lifetime
+    )
+
+  # Expand each period into 5 commissioning years (1/5 each year)
+  df_vintages <- df_long %>%
+    filter(annual_payment_period != 0) %>%
+    mutate(commission_years = map2(start_year, period, ~ seq(.x, .y, by = 1L))) %>%
+    unnest(commission_years) %>%
+    mutate(
+      commissioning_year = commission_years,
+      annual_payment_vintage = annual_payment_period / period_len,
+      # Each vintage runs for `lifetime` years from its commissioning year
+      vintage_end_year = commissioning_year + lifetime - 1L
+    ) %>%
+    select(-commission_years)
+
+  df_cashflows <- df_vintages %>%
+    mutate(years = map2(commissioning_year, vintage_end_year, ~ seq(.x, .y, by = 1L))) %>%
+    unnest(years) %>%
+    rename(year = years) %>%
+    group_by(region, wacc, year) %>%
+    summarise(
+      annual_cashflow = sum(annual_payment_vintage, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  return(df_cashflows)
+}
+
+
 calc_cumu_investment_costs <- function(df, discount = 0.05){
   # annualize the costs
   df_discounted <- df %>%
@@ -545,6 +720,16 @@ combine_investment_costs <- function(scenarios) {
     mutate(value = value * 1000) #convert to billion USD
 }
 
+combine_cash_flows <- function(scenarios) {
+  # scenarios: list of scenario objects, each with $gdx and $name
+  # calc_fun: function to calculate cash flows, e.g. ccalc_cash_flows_wacc_sensitivity
+  dfs <- lapply(scenarios, function(scen) {
+    calc_cash_flows_wacc_sensitivity(scen$gdx) %>% mutate(scenario = scen$name)
+  })
+  df.totalcashflows <- bind_rows(dfs) %>%
+    mutate(period = as.numeric(year)) %>%
+    mutate(annual_cashflow = annual_cashflow * 1000) #convert to billion USD
+}
 
 plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot = FALSE){
   if(region_to_plot == "Global"){

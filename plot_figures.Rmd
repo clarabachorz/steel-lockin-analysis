@@ -107,6 +107,16 @@ scenario_TWLI_highCCS <- list(
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_highCCSinjecrate-PkBudg820.mif"
 )
 
+scenario_TWLI_40yrBFBOF <- list(
+  name = "Transition with lock-in 40yr BF-BOF",
+  mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_40yrBFBOF-PkBudg820.mif"
+)
+
+scenario_FT_40yrBFBOF <- list(
+  name = "Fast Transition 40yr BF-BOF",
+  mif_file = "inputdata/mif/REMIND_generic_FastTransition_40yrBFBOF-PkBudg820.mif"
+)
+
 scenarios <- list(scenario_CP, scenario_TWLI, scenario_FT)
 scenarios_for_lcop <- list(scenario_CP, scenario_TWLI, scenario_FT, scenario_TWLI_1p5LO)
 
@@ -315,63 +325,105 @@ plot_invst_fossil(df.totalcosts, region_to_plot = "IND",save_plot = TRUE)
 
 ```
 
+```{r calc cash flows}
+source("./analysis/R/investment_costs.R")
+# df_cashflows <- combine_cash_flows(scenarios)
+
+
+df_plot <- df_cashflows %>%
+  filter(region == "IND", scenario == "Fast transition") %>%
+    mutate(wacc_f = factor(
+      wacc,
+      levels = sort(unique(wacc)),
+      labels = scales::percent(sort(unique(wacc)), accuracy = 1)
+    ))
+
+ggplot(df_plot, aes(x = year, y = annual_cashflow, color = wacc_f)) +
+  geom_line(linewidth = 1) +
+  scale_color_viridis_d(
+    option = "inferno",
+    begin  = 0.25,
+    end    = 0.85,
+    direction = 1,
+    ) +
+  labs(
+    title = "India: Required annual capital cash flow for DRI-EAF investments",
+    x = "",
+    y = "Required annual cash flow [billion USD/year]",
+    color = "WACC"
+  ) +
+  theme_minimal()
+ggsave("India_cashflow_plot.png", plot = last_plot(), dpi = 300)
+```
+
 ## Plot Supplementary Figures
 ```{r plot extended and supplementary figures}
 source("./analysis/R/supp_and_ext_plots.R")
 
 
-#create list of gdx files
-gdx_list <- list()
-gdx_list$gdx <- lapply(scenarios, function(scen) {
-  scen$gdx
-})
-gdx_list$name <- lapply(scenarios, function(scen) {
-  scen$name
-})
+# #create list of gdx files
+# gdx_list <- list()
+# gdx_list$gdx <- lapply(scenarios, function(scen) {
+#   scen$gdx
+# })
+# gdx_list$name <- lapply(scenarios, function(scen) {
+#   scen$name
+# })
 
-#create list of scenarios with mif data
-scens_1p5LO <- list(scenario_FT_1p5LO, scenario_TWLI_1p5LO)
-mif_list_1p5LO <- lapply(scens_1p5LO, function(scen) {
-  mif <- read.quitte(scen$mif_file)
-  mif
-})
+# #create list of scenarios with mif data
+# scens_1p5LO <- list(scenario_FT_1p5LO, scenario_TWLI_1p5LO)
+# mif_list_1p5LO <- lapply(scens_1p5LO, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
 
-plot_REMIND_steel_production(mif_list_1p5LO, fig_name = "FigureS1")
+# plot_REMIND_steel_production(mif_list_1p5LO, fig_name = "FigureS1")
 
-scens_2C <- list(scenario_FT_2C, scenario_TWLI_2C)
-mif_list_2C <- lapply(scens_2C, function(scen) {
-  mif <- read.quitte(scen$mif_file)
-  mif
-})
+# scens_2C <- list(scenario_FT_2C, scenario_TWLI_2C)
+# mif_list_2C <- lapply(scens_2C, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
 
-plot_REMIND_steel_production(mif_list_2C, fig_name = "FigureS2")
+# plot_REMIND_steel_production(mif_list_2C, fig_name = "FigureS2")
 
-scens_CCS <- list(scenario_TWLI, scenario_TWLI_highCCS, scenario_TWLI_lowBio, scenario_TWLI_lowBio_highCCS)
-mif_list_CCS <- lapply(scens_CCS, function(scen) {
-  mif <- read.quitte(scen$mif_file)
-  mif
-})
+# scens_CCS <- list(scenario_TWLI, scenario_TWLI_highCCS, scenario_TWLI_lowBio, scenario_TWLI_lowBio_highCCS)
+# mif_list_CCS <- lapply(scens_CCS, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
 
-plot_REMIND_steel_production(mif_list_CCS, fig_name = "FigureS3")
-
-
-## Supp. Fig 4: CO2 prices from all main scenarios
-
-mif_list <- lapply(scenarios, function(scen) {
-  mif <- read.quitte(scen$mif_file)
-  mif
-})
-
-plot_co2_prices(mif_list, fig_name = "FigureS4")
+# plot_REMIND_steel_production(mif_list_CCS, fig_name = "FigureS3")
 
 
-## Other Supp Figs: energy prices for the main scenarios
-plot_energy_prices(mif_list, "Price|Final Energy|Industry|Solids|Rawdata", "Solid fuel", fig_name = "FigureS5")
-plot_energy_prices(mif_list, "Price|Final Energy|Industry|Gases|Rawdata", "Gaseous fuel (excl. hydrogen)\n", fig_name = "FigureS6")
-plot_energy_prices(mif_list, "Price|Final Energy|Industry|Hydrogen|Rawdata", "Hydrogen", fig_name = "FigureS7")
-plot_energy_prices(mif_list, "Price|Final Energy|Industry|Electricity|Rawdata", "Electricity", fig_name = "FigureS8")
+# ## Supp. Fig 4: CO2 prices from all main scenarios
+
+# mif_list <- lapply(scenarios, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+# plot_co2_prices(mif_list, fig_name = "FigureS4")
 
 
-# Supp Fig: which sector abates additional emissions in TwLI relative to FT
-plot_em_diff_by_sector(mif_list, fig_name = "FigureS9")
+# ## Other Supp Figs: energy prices for the main scenarios
+# plot_energy_prices(mif_list, "Price|Final Energy|Industry|Solids|Rawdata", "Solid fuel", fig_name = "FigureS5")
+# plot_energy_prices(mif_list, "Price|Final Energy|Industry|Gases|Rawdata", "Gaseous fuel (excl. hydrogen)\n", fig_name = "FigureS6")
+# plot_energy_prices(mif_list, "Price|Final Energy|Industry|Hydrogen|Rawdata", "Hydrogen", fig_name = "FigureS7")
+# plot_energy_prices(mif_list, "Price|Final Energy|Industry|Electricity|Rawdata", "Electricity", fig_name = "FigureS8")
+
+
+# # Supp Fig: which sector abates additional emissions in TwLI relative to FT
+# plot_em_diff_by_sector(mif_list, fig_name = "FigureS9")
+
+
+# # Supp Fig: steel production scenarios, with additional sensitivity of 40yr average lifetime for BF-BOFs (instead of 35yr)
+# scens_40yr <- list(scenario_TWLI, scenario_TWLI_40yrBFBOF, scenario_FT, scenario_FT_40yrBFBOF)
+# mif_list_40yr <- lapply(scens_40yr, function(scen) {
+#   mif <- read.quitte(scen$mif_file)
+#   mif
+# })
+
+plot_REMIND_steel_production(mif_list_40yr, fig_name = "FigureS10")
+
 ```
