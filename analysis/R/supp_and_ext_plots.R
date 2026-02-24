@@ -10,6 +10,8 @@ library(purrr)
 library(ggpubr)
 library(gdx)
 
+library(viridis)
+
 
 require("quitte")
 library("quitte")
@@ -500,9 +502,14 @@ plot_em_diff_by_sector <- function(mif_list, fig_name){
         select(region, period, variable_group, diff) %>%
         mutate(variable_group = factor(variable_group, levels = c("Industry","BECCS","Other CDR","Other",  "Transport", "Buildings","Energy supply")))
 
+    #manual colors (black + viridis d)
+    var_levels <- levels(df_long$variable_group)
+    n_rest = length(var_levels) -1
+    custom_colors <- c("black", viridis(n_rest, option = "inferno", begin = 0.4, end = 1))
+    names(custom_colors) <- var_levels
 
 
-    max_y <- max(df_long$diff, na.rm = TRUE) *1.2
+    max_y <- max(df_long$diff, na.rm = TRUE) *1.3
     min_y <- - max_y
     x_pos <- as.numeric(factor(df_long$period))[which.max(df_long$diff)] # or just pick a suitable x
 
@@ -513,28 +520,44 @@ plot_em_diff_by_sector <- function(mif_list, fig_name){
         # facet_wrap(~ region, ncol = 2) +
         labs(
             x = "",
-            y = "Emissions [Mt CO2/year]",
+            y = "Emissions difference [Mt CO2/year]",
             fill = "Sector",
             title = "Emissions difference by sector between TwLi and FT"
         ) +
         theme_minimal(base_size = 10) +
-        scale_fill_viridis_d(option = "inferno") +
+        scale_fill_manual(values = custom_colors) +
+        # scale_fill_viridis_d(option = "inferno") +
         guides(
             fill = guide_legend(ncol = 1)) +
         theme(
             axis.text.x = element_text(angle = 0),
             legend.position = "right",
             # legend.text. = element_text(size = 6),
-            legend.title.position = "top"
+            legend.title.position = "top",
+            panel.grid.minor = element_blank(),
+            panel.grid.major.x = element_blank()
         ) +
-        annotate("segment", x = 1, xend = 1, y = 5, yend = max_y, 
-                arrow = arrow(length = unit(0.1, "inches")), color = "#818181") +
-        annotate("text", x = 1.2, y = max_y * 0.95, label = "Sector emissions are\nhigher in TwLI", hjust = 0, vjust = 1, size = 3.5, color = "#818181") +
-        annotate("segment", x = 1, xend = 1, y = -5, yend = min_y, 
-                arrow = arrow(length = unit(0.1, "inches")), color = "#818181") +
-        annotate("text", x = 1.2, y = min_y * 0.95, 
-                label = "Sector emissions are lower or\nthere are more negative emissions\n(CDR/BECCS) in TwLI", 
-                hjust = 0, vjust = 0, size = 3.5, color = "#818181")
+        # annotate("segment", x = 1, xend = 1, y = 5, yend = max_y, 
+        #         arrow = arrow(length = unit(0.1, "inches")), color = "white") +
+        annotate(
+            # "text",
+            "label",
+            x = 2.6,
+            y = max_y * 0.5,
+            label = "Higher industry emissions in TwLI\nscenario due to lock-in",
+            hjust = 0, vjust = 1, size = 3.5,
+            fill = "white", alpha = 0.8,
+            color = "black") +
+        # annotate("segment", x = 1, xend = 1, y = -5, yend = min_y, 
+        #         arrow = arrow(length = unit(0.1, "inches")), color = "white") +
+        annotate(
+            "label",
+            x = 4.6,
+            y = min_y * 0.6, 
+            label = "Emission reductions in other sectors\noffsetting the steel lock-in", 
+            hjust = 0, vjust = 0, size = 3.5,
+            fill = "white", alpha = 0.8,
+            color = "black")
 
     write_images(fig, fig_name, height = mm(140))#, height = mm(140))
     show(fig)
