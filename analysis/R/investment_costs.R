@@ -1201,10 +1201,10 @@ plot_cash_flows <- function(scenarios, region_to_plot){
       breaks = seq(min(df_plot_combined$year, na.rm = TRUE), max(df_plot_combined$year, na.rm = TRUE), by = 10)
     ) +
     labs(
-      title = "India: Required annual capital cash flow for DRI-EAF transition",
+      title = "India: Annuity payments for DRI-EAF transition investments",
       subtitle = "Fast Transition scenario. Annualized payments for investments made between 2026-2050.",
       x = "",
-      y = "Annualized capital payments [billion USD/year]",
+      y = "Annuity payments [billion USD/year]",
       fill = "Technology"
     ) +
     theme_minimal() +
