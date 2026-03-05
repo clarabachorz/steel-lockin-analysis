@@ -58,7 +58,7 @@ scenario_CP <- list(
   lcop_file = "./inputdata/other/lcop_avg_npi.csv"
 )
 scenario_TWLI <- list(
-  name = "Transition with lock-in",
+  name = "Transition with Lock-in",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg820.mif",
   gdx = "inputdata/gdx/TransitionwLockIn-PkBudg820.gdx",
   lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in.csv"
@@ -70,7 +70,7 @@ scenario_FT <- list(
   lcop_file = "./inputdata/other/lcop_avg_fast_transition.csv"
 )
 scenario_TWLI_1p5LO <- list(
-  name = "Transition with lock-in 650",
+  name = "Transition with Lock-in 650",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg650.mif",
   gdx = "inputdata/gdx/TransitionwLockIn-PkBudg650.gdx",
   lcop_file = "./inputdata/other/lcop_avg_transition_with_lock-in_650.csv"
@@ -83,7 +83,7 @@ scenario_FT_1p5LO <- list(
 )
 
 scenario_TWLI_2C <- list(
-  name = "Transition with lock-in 2C",
+  name = "Transition with Lock-in 2C",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn-PkBudg1000.mif"
 )
 
@@ -93,22 +93,22 @@ scenario_FT_2C <- list(
 )
 
 scenario_TWLI_lowBio_highCCS <- list(
-  name = "Transition with lock-in low bio high CCS",
+  name = "Transition with Lock-in low bio high CCS",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_lowBio_highCCSinjecrate-PkBudg820.mif"
 )
 
 scenario_TWLI_lowBio <- list(
-  name = "Transition with lock-in low bio",
+  name = "Transition with Lock-in low bio",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_lowBio-PkBudg820.mif"
 )
 
 scenario_TWLI_highCCS <- list(
-  name = "Transition with lock-in high CCS",
+  name = "Transition with Lock-in high CCS",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_highCCSinjecrate-PkBudg820.mif"
 )
 
 scenario_TWLI_40yrBFBOF <- list(
-  name = "Transition with lock-in 40yr BF-BOF",
+  name = "Transition with Lock-in 40yr BF-BOF",
   mif_file = "inputdata/mif/REMIND_generic_TransitionwLockIn_40yrBFBOF-PkBudg820.mif"
 )
 
@@ -312,7 +312,7 @@ combine_cascade_cumueum_and_co2value_plot(mif_list, df_aac_combined, p_scenarioc
 
 We also plot Figure ED4 in this code block: the remaining expenditure required from other fuels (fossil gas, biogas, fossil coal, biomass solids).
 ```{r calc investment costs, fig.height = 9/2.54, fig.width = 18/2.54}
-## calculate total investment costs for all scenarios and regions
+# calculate total investment costs for all scenarios and regions
 df.totalcosts <- combine_investment_costs(scenarios)
 
 # plot investment costs for India

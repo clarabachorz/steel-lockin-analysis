@@ -31,7 +31,7 @@ region_names  <- tribble(
   'Global', 'Global'
 )
 
-scen_order <- c( "Current policies", "Transition with lock-in", "Fast transition")
+scen_order <- c( "Current policies", "Transition with Lock-in", "Fast transition")
 
 # component_colors <- c(
 #   "Solar PV (other steel-\nrelated demand)" = "#fad231",
@@ -740,8 +740,8 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
     group_by(scenario, component) %>%
     summarise(mean = mean(value, na.rm = TRUE)) %>%
     ungroup() %>%
-    mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith lock-in"))) %>%
-    mutate(scenario = factor(scenario, levels = c("Current\npolicies", "Transition\nwith lock-in", "Fast\nTransition")))
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith Lock-in"))) %>%
+    mutate(scenario = factor(scenario, levels = c("Current\npolicies", "Transition\nwith Lock-in", "Fast\nTransition")))
 
   # scenario offset for stacked bar
   scenario_offsets <- setNames(seq(0, by = 1.2, length.out = length(scen_order)), scen_order)
@@ -758,7 +758,7 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
   #scenario labels
   scen_labels <- plot_df %>%
     distinct(period_offset, scenario) %>%
-    mutate(scenario = ifelse(scenario == "Fast transition", "Fast Transition", ifelse(scenario == "Current policies", "Current policies", "Transition with\nlock-in")))
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast Transition", ifelse(scenario == "Current policies", "Current policies", "Transition with\nLock-in")))
 
   totals <- plot_df %>%
     group_by(period_offset, scenario) %>%
@@ -931,8 +931,8 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
     group_by(scenario, component) %>%
     summarise(mean = mean(value, na.rm = TRUE)) %>%
     ungroup() %>%
-    mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith lock-in"))) %>%
-    mutate(scenario = factor(scenario, levels = c("Current\npolicies", "Transition\nwith lock-in", "Fast\nTransition")))
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast\nTransition", ifelse(scenario == "Current policies", "Current\npolicies", "Transition\nwith Lock-in"))) %>%
+    mutate(scenario = factor(scenario, levels = c("Current\npolicies", "Transition\nwith Lock-in", "Fast\nTransition")))
 
   # scenario offset for stacked bar
   scenario_offsets <- setNames(seq(0, by = 1.2, length.out = length(scen_order)), scen_order)
@@ -949,7 +949,7 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
   #scenario labels
   scen_labels <- plot_df %>%
     distinct(timespan_offset, scenario) %>%
-    mutate(scenario = ifelse(scenario == "Fast transition", "Fast Transition", ifelse(scenario == "Current policies", "Current policies", "Transition with\nlock-in")))
+    mutate(scenario = ifelse(scenario == "Fast transition", "Fast Transition", ifelse(scenario == "Current policies", "Current policies", "Transition with\nLock-in")))
 
   totals <- plot_df %>%
     group_by(timespan_offset, scenario) %>%

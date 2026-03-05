@@ -157,25 +157,25 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
     df_aac <- df_aac %>%
           mutate(
             x_pos = case_when(
-            scenario1 == "Current policies" & scenario2 == "Transition with lock-in" ~ region_xpos[as.character(region)] +2,
-            scenario1 == "Transition with lock-in" & scenario2 == "Fast transition" ~ region_xpos[as.character(region)] + 9
+            scenario1 == "Current policies" & scenario2 == "Transition with Lock-in" ~ region_xpos[as.character(region)] +2,
+            scenario1 == "Transition with Lock-in" & scenario2 == "Fast transition" ~ region_xpos[as.character(region)] + 9
             )
         ) %>%
     ungroup() %>%
     mutate(region_label = case_when(
-        scenario1 == "Transition with lock-in" & scenario2 == "Fast transition" ~ paste0(region, "_2"),
+        scenario1 == "Transition with Lock-in" & scenario2 == "Fast transition" ~ paste0(region, "_2"),
         TRUE ~ as.character(region)
         ))
 
   #get region colors from list above
   region_colors <- c(
-    "Current policies" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
+    "Current policies" = "grey", "Transition with Lock-in" = "grey", "Fast transition" = "grey",
     region_order,
     setNames(region_order, paste0(names(region_order), "_2"))
   )
 
   plot_df$region <- factor(plot_df$region, levels = names(region_order))
-  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with lock-in", "Fast transition"))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with Lock-in", "Fast transition"))
 
   # Get total emissions by scenario
   total_df <- plot_df %>%
@@ -194,9 +194,9 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
   # Build waterfall data: baseline total, region contributions, final totals
   waterfall_data <- bind_rows(
     tibble(label = "Current policies", value = total_df$total[total_df$scenario == "Current policies"], type = "total"),
-    cascade_df %>% filter(scenario == "Transition with lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
-    # tibble(label = "Transition with lock-in", value = total_df$total[total_df$scenario == "Transition with lock-in"], type = "total"),
-    tibble(label = "Transition with lock-in", value = FALSE, type = "total"),
+    cascade_df %>% filter(scenario == "Transition with Lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
+    # tibble(label = "Transition with Lock-in", value = total_df$total[total_df$scenario == "Transition with Lock-in"], type = "total"),
+    tibble(label = "Transition with Lock-in", value = FALSE, type = "total"),
     cascade_df %>% filter(scenario == "Fast transition") %>%
       mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
       select(label, value, type),
@@ -217,7 +217,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
 
   # custom x ticks
   labels_vec <- as.character(waterfall_data$label)
-  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with lock-in", "Fast transition"), labels_vec, " ")
+  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with Lock-in", "Fast transition"), labels_vec, " ")
 
   # Create waterfall chart using ggwaterfall
   wf_plot <- waterfall(waterfall_data, 
@@ -242,7 +242,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
       x_pos = ifelse(
         scenario == "Current policies",
         1,
-        ifelse(scenario == "Transition with lock-in", 8, 15)))
+        ifelse(scenario == "Transition with Lock-in", 8, 15)))
 
   # manually calculate the y positions for the aac annotations
   df_aac <- df_aac %>%
@@ -323,7 +323,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   #get region colors from list above
   region_colors <- c(
-    "Current policies" = "grey", "Transition with lock-in" = "grey", "Fast transition" = "grey",
+    "Current policies" = "grey", "Transition with Lock-in" = "grey", "Fast transition" = "grey",
     region_order,
     setNames(region_order, paste0(names(region_order), "_2"))
   )
@@ -350,7 +350,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
 
   plot_df$region <- factor(plot_df$region, levels = names(region_order))
-  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with lock-in", "Fast transition"))
+  plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies", "Transition with Lock-in", "Fast transition"))
 
   # Get total emissions by scenario
   total_df <- plot_df %>%
@@ -369,8 +369,8 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
   # Build waterfall data: baseline total, region contributions, final totals
   waterfall_data <- bind_rows(
     tibble(label = "Current policies", value = total_df$total[total_df$scenario == "Current policies"], type = "total"),
-    cascade_df %>% filter(scenario == "Transition with lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
-    tibble(label = "Transition with lock-in", value = FALSE, type = "total"),
+    cascade_df %>% filter(scenario == "Transition with Lock-in") %>% mutate(label = region, value = diff, type = "region") %>% select(label, value, type),
+    tibble(label = "Transition with Lock-in", value = FALSE, type = "total"),
     cascade_df %>% filter(scenario == "Fast transition") %>%
       mutate(label = paste0(region, "_2"), value = diff, type = "region") %>%
       select(label, value, type),
@@ -387,7 +387,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   # custom x ticks
   labels_vec <- as.character(waterfall_data$label)
-  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with lock-in", "Fast transition"), labels_vec, " ")
+  labels_vec <- ifelse(labels_vec %in% c("Current policies", "Transition with Lock-in", "Fast transition"), labels_vec, " ")
 
 
   # Create waterfall chart using ggwaterfall
@@ -405,7 +405,7 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
 
   plot_df <- plot_df %>%
     # filter(period == 2050) %>%
-    mutate(x_pos = ifelse(scenario == "Current policies", 1, ifelse(scenario == "Transition with lock-in", 8, 15))) #%>%
+    mutate(x_pos = ifelse(scenario == "Current policies", 1, ifelse(scenario == "Transition with Lock-in", 8, 15))) #%>%
 
   wf_plot <- wf_plot +
     geom_bar(data = plot_df,

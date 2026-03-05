@@ -63,8 +63,8 @@ region_groups <- list(
 scen_names <- list(
     "TransitionwLockIn-NPi" = "Current Policies",
     "TransitionwLockIn-PkBudg820" = "TwLI",
-    "TransitionwLockIn-PkBudg650" = "Transition w lock-in (1.5C,\nlow overshoot)",
-    "TransitionwLockIn-PkBudg1000" = "Transition w lock-in (2°C)",
+    "TransitionwLockIn-PkBudg650" = "Transition w Lock-in (1.5C,\nlow overshoot)",
+    "TransitionwLockIn-PkBudg1000" = "Transition w Lock-in (2°C)",
     "TransitionwLockIn_40yrBFBOF-PkBudg820" = "TwLI (40yr BF-BOF)",
     "FastTransition-PkBudg820" = "Fast transition",
     "FastTransition-PkBudg1000" = "Fast transition (2°C)",
@@ -157,7 +157,7 @@ plot_REMIND_steel_cap_add <- function(gdxlist) {
         mutate(eaf = eaf - idr) %>%
         pivot_longer(cols = c("eaf", "idr", "bfcc", "idrcc", "bof"), names_to = "all_te", values_to = "value")
 
-    plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies","Transition with lock-in","Fast transition"))
+    plot_df$scenario <- factor(plot_df$scenario, levels = c("Current policies","Transition with Lock-in","Fast transition"))
     plot_df$all_te <- factor(plot_df$all_te, levels = c("idr","idrcc","eaf","bfcc","bof"))
 
     cap_add <- ggplot(plot_df, aes(x = period, y = value, fill = all_te)) +
