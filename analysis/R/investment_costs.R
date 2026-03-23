@@ -581,7 +581,7 @@ calc_cash_flows_wacc_sensitivity <- function(gdx, FORBID_NG_DRI = FALSE) {
     filter(period <= 2050, period >= 2020) %>%
     # focus on DRI-EAF for this section
     # filter(component == "DRI-EAF")
-    filter(component %in% c("DRI-EAF", "Electrolysis", "Solar PV\n(for electrolysis)", "Solar PV (DRI-EAF)"))
+    filter(component %in% c("DRI-EAF", "Electrolysis", "Solar PV\n(for electrolysis)", "Solar PV (DRI-EAF)", "BF-BOF"))
 
   #select 4 wacc sensitivities
   wacc_vec <- c(0.05, 0.08, 0.12)
@@ -591,13 +591,14 @@ calc_cash_flows_wacc_sensitivity <- function(gdx, FORBID_NG_DRI = FALSE) {
       select(region, all_te, value) %>%
       rename(lifetime = value) %>%
       # idr and eaf have the same discount factro (same lifetime)
-      filter(all_te %in% c("idr", "elh2", "spv")) 
+      filter(all_te %in% c("idr", "elh2", "spv", "bf")) 
 
   df.discFac <- bind_rows(
     df.discFac %>% filter(all_te == "idr") %>% mutate(component = "DRI-EAF"), 
     df.discFac %>% filter(all_te == "elh2") %>% mutate(component = "Electrolysis"),
     df.discFac %>% filter(all_te == "spv") %>% mutate(component = "Solar PV\n(for electrolysis)"),
-    df.discFac %>% filter(all_te == "spv") %>% mutate(component = "Solar PV (DRI-EAF)")
+    df.discFac %>% filter(all_te == "spv") %>% mutate(component = "Solar PV (DRI-EAF)"),
+    df.discFac %>% filter(all_te == "bf") %>% mutate(component = "BF-BOF")
     ) %>% 
       # mutate(component = "DRI-EAF") %>%
       crossing(wacc = wacc_vec) %>%
@@ -1166,7 +1167,18 @@ plot_cash_flows <- function(scenarios, region_to_plot){
           levels = sort(unique(wacc)),
           labels = paste0("WACC: ", scales::percent(sort(unique(wacc)), accuracy = 1))
         ),
-        case = "NG-DRI bridge to H2-DRI\n(model result)"
+        case = "Fast Transition:\nNG-DRI bridge to H2-DRI\n(model result)"
+      )
+  
+  df_plot_CurrPol <- df_cashflows %>%
+    filter(region == region_to_plot, scenario == "Current policies") %>%
+      mutate(
+        wacc_f = factor(
+          wacc,
+          levels = sort(unique(wacc)),
+          labels = paste0("WACC: ", scales::percent(sort(unique(wacc)), accuracy = 1))
+        ),
+        case = "Current policies reference"
       )
 
   df_plot_noNG <- df_cashflows_noNG %>%
@@ -1177,20 +1189,32 @@ plot_cash_flows <- function(scenarios, region_to_plot){
           levels = sort(unique(wacc)),
           labels = paste0("WACC: ", scales::percent(sort(unique(wacc)), accuracy = 1))
         ),
-        case = "H2-DRI leapfrogging\n(post-processed)"
+        case = "Fast Transition:\nH2-DRI leapfrogging\n(post-processed)"
       )
 
   component_colors <- c(
     "Solar PV (DRI-EAF)" = "#ee8866",
     "Solar PV\n(for electrolysis)" = "#eedd88",
     "Electrolysis" = "#ffaabb",
-    "DRI-EAF" = "#99ddff")
+    "DRI-EAF" = "#99ddff",
+    "BF-BOF" = "#5a5a5a"
+  )
 
-  df_plot_combined <- bind_rows(df_plot, df_plot_noNG)
+  df_plot_combined <- bind_rows(df_plot, df_plot_noNG, df_plot_CurrPol) %>%
+    select(-region, -wacc, -discFac, -scenario, -period)
 
-  df_plot_combined$component <- factor(df_plot_combined$component, levels = c("Solar PV\n(for electrolysis)", "Electrolysis", "Solar PV (DRI-EAF)","DRI-EAF"))
-  df_plot_combined$case <- factor(df_plot_combined$case, levels = c("NG-DRI bridge to H2-DRI\n(model result)", "H2-DRI leapfrogging\n(post-processed)"))
-
+  df_plot_combined$component <- factor(df_plot_combined$component, levels = c("Solar PV\n(for electrolysis)", "Electrolysis", "Solar PV (DRI-EAF)","DRI-EAF", "BF-BOF"))
+  df_plot_combined$case <- factor(df_plot_combined$case, levels = c("Current policies reference", "Fast Transition:\nNG-DRI bridge to H2-DRI\n(model result)", "Fast Transition:\nH2-DRI leapfrogging\n(post-processed)"))
+  
+  # Ensure all components are present for each year/case/wacc_f 
+  all_combos <- expand.grid(
+    year = unique(df_plot_combined$year),
+    component = levels(df_plot_combined$component),
+    case = levels(df_plot_combined$case),
+    wacc_f = levels(df_plot_combined$wacc_f)
+  )
+  df_plot_combined <- left_join(all_combos, df_plot_combined, by = c("year", "component", "case", "wacc_f"))
+  df_plot_combined$annual_cashflow[is.na(df_plot_combined$annual_cashflow)] <- 0
 
   ## AREA PLOTS
   cash_flow_plot <- ggplot(df_plot_combined, aes(x = year, y = annual_cashflow, fill = component)) +
@@ -1201,8 +1225,8 @@ plot_cash_flows <- function(scenarios, region_to_plot){
       breaks = seq(min(df_plot_combined$year, na.rm = TRUE), max(df_plot_combined$year, na.rm = TRUE), by = 10)
     ) +
     labs(
-      title = "India: Annuity payments for DRI-EAF transition investments",
-      subtitle = "Fast Transition scenario. Annualized payments for investments made between 2026-2050.",
+      title = "India: Annuity payments for primary steel investments",
+      subtitle = "Annualized payments for investments made between 2026-2050.",
       x = "",
       y = "Annuity payments [billion USD/year]",
       fill = "Technology"
@@ -1210,7 +1234,8 @@ plot_cash_flows <- function(scenarios, region_to_plot){
     theme_minimal() +
     theme(
       legend.position = "bottom",
-      panel.grid.minor = element_blank()
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 90, hjust = 1, color = "black")
     )
 
   ggsave(
