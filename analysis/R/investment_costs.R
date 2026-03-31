@@ -578,7 +578,7 @@ calc_cash_flows_wacc_sensitivity <- function(gdx, FORBID_NG_DRI = FALSE) {
     #make value yearly cost. 
     #Only works up to 2060, afterwards model takes 10 yr time steps
     #but this estimation is also only valid up to 2050/2055
-    filter(period <= 2050, period >= 2020) %>%
+    filter(period <= 2050, period >= 2030) %>%
     # focus on DRI-EAF for this section
     # filter(component == "DRI-EAF")
     filter(component %in% c("DRI-EAF", "Electrolysis", "Solar PV\n(for electrolysis)", "Solar PV (DRI-EAF)", "BF-BOF"))
