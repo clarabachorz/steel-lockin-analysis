@@ -2,6 +2,7 @@ library(tidyverse)
 library(ggplot2)
 library(grid)
 library(quitte)
+library(geomtextpath)
 require(gridExtra)
 
 
@@ -203,7 +204,7 @@ plot_BOF_capacity <- function(save_plot=FALSE){
     theme(legend.position = "right")
 
   if(save_plot){
-    ggsave("figs/BOF_capacity_plot.png", width = 10, height = 6, dpi = 300)
+    ggsave("figs/BOF_capacity_plot.jpg", width = 10, height = 6, dpi = 300)
   }
 }
 
@@ -330,7 +331,7 @@ plot_emissions_1and2relining <- function(save_plot=FALSE){
   print(p)
   
   if(save_plot){
-    ggsave("figs/BOF_emissions_plot_1_and_2_relinings.png", width = 11, height = 8, dpi = 300)
+    ggsave("figs/BOF_emissions_plot_1_and_2_relinings.jpg", width = 11, height = 8, dpi = 300)
   }
 }
 
@@ -377,7 +378,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
                                 "Additional_net_BOF_capacity_operating_1_relining" = "Operating BF-BOF capacity,\nassuming one BF relining",
                                 "Total_net_existing_BOF_capacity" = "Operating BF-BOF capacity,\nassuming no further BF\nrelinings"))+
     labs(
-      title = expression("Global yearly and cumulative CO"[2]*" emissions from existing and planned BF-BOF* plants"),
+      title = expression("Global yearly and cumulative CO"[2]*" emissions from existing and planned BF-BOF plants"),
       fill = "Bar legend",
       x = "",
       color = "Line legend: cumulative\n emissions from 2025")
@@ -405,7 +406,7 @@ plot_emissions_1relining <- function(save_plot=FALSE){
       name = expression("Yearly emissions (Gt CO"[2]*"/year; bars)"),
       sec.axis = sec_axis(~ . * scale_factor, name = expression("Cumulative emissions from 2025 (Gt CO"[2]*"; lines)"))
     ) +
-    labs(caption = "*BF-BOF is used as a general term; a small subset of included BOF\nfacilities operate without a BF or rely on alternative iron production methods."
+    labs(caption = "BF-BOF is used as a general term; a small subset of included BOF\nfacilities operate without a BF or rely on alternative iron production methods."
           ) +
     # labs(color = "Line Legend") +
     scale_x_discrete(breaks = x_breaks) +
@@ -472,8 +473,8 @@ plot_emissions_1relining <- function(save_plot=FALSE){
               lineheight = 0.9, size = 2.9)
 
   if(save_plot){
-    ggsave("figs/Figure2.png", width = 180, height = 140, units = "mm", dpi = 300)
-    ggsave("figs/Figure2.svg", width = 180, height = 140, units = "mm")
+    ggsave("figs/Figure2.jpg", width = 180, height = 140, units = "mm", dpi = 300)
+    ggsave("figs/Figure2.pdf", width = 180, height = 140, units = "mm")
   }
   show(p)
 }
@@ -638,7 +639,7 @@ plot_regional_production <- function(save_plot=FALSE){
     annotate("text", x = 1964, y = 1595, label = "4", color = col_ssa, size = 3)
 
   if(save_plot){
-    ggsave("figs/BOF_regional_production_plot_wprojections.png", p, width = 8, height = 6, dpi = 300)
+    ggsave("figs/BOF_regional_production_plot_wprojections.jpg", p, width = 8, height = 6, dpi = 300)
   }
   return(p)
 }
@@ -759,7 +760,7 @@ plot_capacity_additions <- function(save_plot=FALSE){
         lineheight = 0.9, size = 2.3, angle = 90)
 
   if(save_plot){
-    ggsave("figs/BOF_regional_capacity_additions_plot.png", p, width = 8, height = 6, dpi = 300)
+    ggsave("figs/BOF_regional_capacity_additions_plot.jpg", p, width = 8, height = 6, dpi = 300)
   }
   return(p)
 }
@@ -776,8 +777,8 @@ plot_combine_production_and_cap_additions <- function(save_plot=FALSE){
                             align = "v")
   # print(combined_plot)
   if(save_plot){
-    ggsave("figs/Figure1.png", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
-    ggsave("figs/Figure1.svg", combined_plot, width = 180, height = 100, units = "mm")
+    ggsave("figs/Figure1.jpg", combined_plot, width = 180, height = 100, units = "mm", dpi = 300)
+    ggsave("figs/Figure1.pdf", combined_plot, width = 180, height = 100, units = "mm")
   }
   show(combined_plot)
 }
@@ -928,7 +929,7 @@ plot_BFBOF_age_distribution <- function(save_plot=FALSE){
           )
   print(p)
   if(save_plot){
-    ggsave("figs/BOF_age_distribution_plot_wregions.png", width = 10, height = 6, dpi = 300)
+    ggsave("figs/BOF_age_distribution_plot_wregions.jpg", width = 10, height = 6, dpi = 300)
   }
   show(p)
 }
@@ -1052,6 +1053,149 @@ plot_cumulative_capacity_additions <- function(save_plot=FALSE){
 
   print(p)
   if(save_plot){
-    ggsave("figs/BOF_regional_cumulative_capacity_plot.png", p, width = 8, height = 6, dpi = 300)
+    ggsave("figs/BOF_regional_cumulative_capacity_plot.jpg", p, width = 8, height = 6, dpi = 300)
   }
+}
+
+plot_simplified_cumu_emissions <- function(REMIND_cumu_emissions){
+
+  x_breaks <- seq(2020, 2075, by = 5)
+
+
+  data_cumu_toplot <- data_long_em_cumu %>%
+    filter(Category %in% c(
+                          "Cumu_oldBOF_andnew",
+                          "Cumu_oldBOF_underconstruction",
+                          "Cumu_oldBOF_1relining",
+                          "Cumu_oldBOF")) %>%
+    filter(index >= 2025 & index <2071) %>%
+    mutate(Emissions = Emissions / 1000) # to GtCO2
+    
+  # Substract cumu_oldBOF_underconstruction from cumu_oldBOF_1relining and add this to cumu_oldBOF
+  # Pivot wider to calculate the difference
+  data_cumu_wide <- data_cumu_toplot %>%
+    select(index, Category, Emissions) %>%
+    pivot_wider(names_from = Category, values_from = Emissions)
+
+  # Calculate the modified Cumu_oldBOF
+  data_cumu_wide <- data_cumu_wide %>%
+    mutate(
+      Cumu_oldBOF_modified = Cumu_oldBOF + (Cumu_oldBOF_underconstruction - Cumu_oldBOF_1relining)
+    )
+
+  # Keep only two categories
+  data_cumu_final <- data_cumu_wide %>%
+    select(index, Cumu_oldBOF_andnew, Cumu_oldBOF_modified) %>%
+    pivot_longer(
+      cols = c(Cumu_oldBOF_andnew, Cumu_oldBOF_modified),
+      names_to = "Category",
+      values_to = "Emissions"
+    )
+
+  REMIND_cumu_emissions <- REMIND_cumu_emissions %>%
+    filter(scenario == "TransitionwLockIn-NPi") %>%
+    mutate(Category = "REMIND_cumu_emissions",
+            Emissions = cumu_CO2 / 1000) %>% # to GtCO2  
+    rename(index = period) %>%
+    select(index, Category, Emissions)
+
+  data_cumu_final <- bind_rows(data_cumu_final, REMIND_cumu_emissions)
+  
+  data_cumu_final$Category <- factor(data_cumu_final$Category, levels = c("REMIND_cumu_emissions","Cumu_oldBOF_andnew", "Cumu_oldBOF_modified"))
+  
+  
+  #plot lines
+  p <- ggplot(data_cumu_final, aes(x = index, y = Emissions, color = Category, group = Category)) +
+    geom_line(linewidth = 0.8) +
+    geom_textpath(
+      data = subset(data_cumu_final, Category == "REMIND_cumu_emissions"),
+      aes(label = "Current trends continue"),
+      color = "#b11d36",
+      text_only = TRUE,
+      size = 3,
+      hjust = 0.88,
+      vjust = -0.3
+    ) +
+    geom_textpath(
+      data = subset(data_cumu_final, Category == "Cumu_oldBOF_andnew"),
+      aes(label = "Committed if plans proceed"),
+      color = "#c77100",
+      text_only = TRUE,
+      size = 3,
+      hjust = 0.94,
+      vjust = -0.3
+    ) +
+    geom_textpath(
+      data = subset(data_cumu_final, Category == "Cumu_oldBOF_modified"),
+      aes(label = "Best case"),
+      color = "#186903",
+      text_only = TRUE,
+      size = 3,
+      hjust = 0.8,
+      vjust = -0.3
+    ) +
+    labs(title = "The steel sector risks locking in decades of CO2 emissions,\nbut most can still be avoided",
+         x = NULL,
+         y = "Cumulative emissions (GtCO2)",
+         color = "") +
+        scale_color_manual(
+      values = c(
+        "Cumu_oldBOF_andnew" = "#c77100",
+        "Cumu_oldBOF_modified" = "#186903",
+        "REMIND_cumu_emissions" = "#b11d36"
+      ),
+      labels = c(
+        "REMIND_cumu_emissions" = "Current investment trends continue",
+        "Cumu_oldBOF_andnew" = "Committed at present: all planned plants built and existing ones refurbished",
+        "Cumu_oldBOF_modified" = "Cancel new coal-based steel investments and refurbishments"
+      )
+    ) +
+    scale_x_continuous(breaks = x_breaks, expand = c(0.01, 0)) +
+    scale_y_continuous(
+      name = "Cumulative Emissions",
+      labels = function(x) paste0(x, " billion\ntons CO\u2082"),
+      limits = c(0, 118),
+      sec.axis = sec_axis(
+        ~ . / 585 * 100,
+        name = "Share of carbon budget\n(warming below 1.7°C, from 2025)",
+        labels = function(x) paste0(round(x, 1), " %")
+      )
+    ) +
+    theme_bw() +
+    theme(
+      text = element_text(size = 9),
+      plot.title = element_text(size = 12, face = "bold"),
+      axis.title = element_text(size = 10),
+      axis.text = element_text(size = 9),
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 8),
+
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(colour = "grey92", linewidth = 0.3),
+      axis.text.x = element_text(margin = margin(t = 1)),
+      #axis.text.x = element_text(angle = 90, hjust = 1),
+      axis.text.y = element_text(margin = margin(r = 1)),
+      legend.position = "bottom",
+
+      # axis.title=element_blank(),
+      # plot.margin=unit(c(0,0,0,0), "pt")
+      ) +
+    guides(color="none")#guide_legend(nrow=3,byrow=TRUE))
+    #   +
+    # guides(
+    #   fill = guide_legend(
+    #     byrow = TRUE,
+    #     # title = "Bar legend",
+    #     keyheight = unit(0.9, "cm"),
+    #     ),
+    #   group = guide_legend(
+    #     byrow = TRUE,
+    #     # title = "Line legend",
+    #     keyheight = unit(0.8, "cm"),
+    #     )
+    #   )
+  # show(p)
+
+  ggsave("figs/FigurePB.jpg", width = 180, height = 100, units = "mm", dpi = 300)
+  ggsave("figs/FigurePB.pdf", width = 180, height = 100, units = "mm")
 }

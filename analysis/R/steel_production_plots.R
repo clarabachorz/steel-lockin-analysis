@@ -32,9 +32,9 @@ mm <- function (x) {
 
 # Function for exporting image to various formats with correct size and resolution.
 
-write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
+write_images <- function (fig, name, height, width = mm(180), formats = c('jpg', 'pdf')) {
     for (f in formats) {
-        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps')) {
+        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps', 'jpg')) {
             stop(paste0('Unknown format', f))
         }
         path <- paste0("./figs/", name, ".", f)

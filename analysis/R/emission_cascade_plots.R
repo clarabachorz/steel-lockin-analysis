@@ -22,18 +22,24 @@ calc_cumuem <- function(df, region_to_calculate) {
                 # "Emi|CO2|Energy|Demand|Industry|Steel", # if we want the breakdown of what kind of liquids etc
                  variable, 
                  fixed = TRUE)) %>%
-    # filter(between(period, 2025, 2070),
     filter(between(period, 2025, 2080),
            region == region_to_calculate) %>%
     select(-model, -region) %>%
     #add up the different components: solid, liquids ..
     group_by(period, scenario) %>%
-    summarise(total_CO2_yearly = sum(value, na.rm = TRUE),
-          total_CO2_5year = total_CO2_yearly * 5) %>%
+    summarise(total_CO2_yearly = sum(value, na.rm = TRUE)) %>%
     ungroup() %>%
     group_by(scenario) %>%
-    mutate(cumu_CO2 = cumsum(total_CO2_5year)) %>%
-    summarise(cumu_CO2 = max(cumu_CO2))
+    complete(period = full_seq(period, 1)) %>%  # Fill every year
+    arrange(scenario, period) %>%
+    mutate(value = total_CO2_yearly) %>%
+    fill(value, .direction = "down") %>%
+    ungroup() %>%
+    select(-total_CO2_yearly) %>%
+    mutate(period = period - 2) %>% 
+    filter(between(period, 2025, 2070)) %>%
+    mutate(cumu_CO2 = cumsum(value)) %>%
+    ungroup()
 }
 
 
@@ -99,6 +105,10 @@ fill_colors = c(
       "Middle East and North Africa" = col_mea,
       "Global North" = col_useur
 )
+
+calc_global_cumuem <- function(miflist) {
+  map_dfr(miflist, calc_cumuem, region_to_calculate = "World")
+}
 
 plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
   end_year <- 2070
@@ -227,7 +237,7 @@ plot_cascade_cumuem <- function(miflist, df_aac, show_aac_annotations = FALSE) {
             fill_by_sign = FALSE, fill_colours = waterfall_data$color) +
     # scale_x_discrete(labels = label_fun)+
     labs(
-      title = "Breakdown of cumulative emissions from steel production\n(2025 to 2070) and average abatement costs",
+      title = expression("Cumulative CO"[2]*" emissions from steel production between 2025 and 2070"),
       y = expression("Cumulative emissions (Gt CO"[2]*")"),
       fill = "Region"
     ) +
@@ -314,8 +324,8 @@ combine_cascade_cumueum_and_co2value_plot <- function(mif_list, df_aac_combined,
     font.label = list(size = 16, face = "bold")
     )
   # p_combined
-  ggsave("./figs/Figure4.png", p_combined, width = 180, height = 180, units = "mm")
-  ggsave("./figs/Figure4.svg", p_combined, width = 180, height = 180, units = "mm")
+  ggsave("./figs/Figure4.jpg", p_combined, width = 180, height = 180, units = "mm")
+  ggsave("./figs/Figure4.pdf", p_combined, width = 180, height = 180, units = "mm")
   show(p_combined)
 }
 
@@ -419,6 +429,6 @@ plot_cascade_yearlyem <- function(miflist, year_to_plot= 2050) {
       panel.grid.minor = element_blank(),
       axis.ticks = element_blank())
   # print(wf_plot)
-  ggsave(paste0("figs/cascade_yearly_emi_",year_to_plot,"_scen.png"), width = 12, height = 8, dpi = 300)
+  ggsave(paste0("figs/cascade_yearly_emi_",year_to_plot,"_scen.jpg"), width = 12, height = 8, dpi = 300)
 }
 

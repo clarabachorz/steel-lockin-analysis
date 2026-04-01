@@ -16,7 +16,7 @@ Make sure to run all the cells in this section.
 ```{r install packages, include=FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)
-required_packages <- c( "magclass", "waterfalls", "dplyr", "gridExtra", "grid", "purrr", "ggpubr", "ggplot2", "quitte", "tidyverse", "mrremind")
+required_packages <- c( "magclass", "waterfalls", "dplyr", "gridExtra", "grid", "purrr", "ggpubr", "ggplot2", "quitte", "tidyverse", "mrremind", "geomtextpath")
 
 for (pkg in required_packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -255,8 +255,8 @@ run_and_save_abatement_cost_plot <- function(scenario1, scenario2, region_to_agg
 
   #save
   if (save_plot) {
-    ggsave(paste0(filename, ".png"), plot = results$plot, width = 180, height = 90, unit = "mm")
-    ggsave(paste0(filename, ".svg"), plot = results$plot, width = 180, height = 90, unit = "mm")
+    ggsave(paste0(filename, ".jpg"), plot = results$plot, width = 180, height = 90, unit = "mm")
+    ggsave(paste0(filename, ".pdf"), plot = results$plot, width = 180, height = 90, unit = "mm")
     }
   return(results$fscp_df_grouped %>% mutate(scenario1 = scenario1$name, scenario2 = scenario2$name))
 }
@@ -299,7 +299,7 @@ Then, we combine this plot (`p_scenariocost_vs_co2value`) with the emission casc
 df <- run_scenario_cost_andCO2value_comparison(scenario_TWLI, scenario_FT, region_to_aggr, start_date, end_date, discount_rate = discount_rate)
 p_scenariocost_vs_co2value <- df$plot
 
-## Combine all elements in Figure 4: 
+## Combine all elements in Figure 4:
 combine_cascade_cumueum_and_co2value_plot(mif_list, df_aac_combined, p_scenariocost_vs_co2value, show_aac_annotations = TRUE)
 
 ## Additional plots: yearly emission cascades for specific years
@@ -398,4 +398,11 @@ mif_list_40yr <- lapply(scens_40yr, function(scen) {
 })
 
 plot_REMIND_steel_production(mif_list_40yr, fig_name = "FigureS9")
+
+
+## Supp. Fig
+# get CO2 emissions from the REMIND scenarios
+cumu_em <- calc_global_cumuem(mif_list)
+#combine with GEM data (plant level estimation of lock-in)
+plot_simplified_cumu_emissions(cumu_em)
 ```

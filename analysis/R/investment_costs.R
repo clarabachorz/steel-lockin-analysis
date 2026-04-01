@@ -883,11 +883,11 @@ plot_invst_costs <- function(df.totalcosts, region_to_plot = "India", save_plot 
 
   if(save_plot){
     ggsave(
-      paste0("figs/investment_costs_", region_to_plot, ".png"),
+      paste0("figs/investment_costs_", region_to_plot, ".jpg"),
       plot = combined_plot,
       width = 180, height = 90, units = "mm", dpi = 300)
     ggsave(
-      paste0("figs/investment_costs_", region_to_plot, ".svg"),
+      paste0("figs/investment_costs_", region_to_plot, ".pdf"),
       plot = combined_plot,
       width = 180, height = 90, unit = "mm")
   }
@@ -1076,11 +1076,11 @@ plot_invst_costs_v2 <- function(df.totalcosts, region_to_plot = "India", save_pl
 
   if(save_plot){
     ggsave(
-      "figs/Figure5.png",
+      "figs/Figure5.jpg",
       plot = combined_plot,
       width = 180, height = 90, units = "mm", dpi = 300)
     ggsave(
-      "figs/Figure5.svg",
+      "figs/Figure5.pdf",
       plot = combined_plot,
       width = 180, height = 90, unit = "mm")
   }
@@ -1142,13 +1142,9 @@ plot_invst_fossil <- function(df.totalcosts, region_to_plot = "IND", save_plot =
   #save
   if(save_plot){
     ggsave(
-      "figs/FigureED5.png",
+      "figs/FigureED5.jpg",
       plot = region_plot,
       width = 180, height = 90, units = "mm")
-    ggsave(
-      "figs/FigureED5.svg",
-      plot = region_plot,
-      width = 180, height = 90, unit = "mm")
   }
   show(region_plot)
 }
@@ -1239,13 +1235,8 @@ plot_cash_flows <- function(scenarios, region_to_plot){
     )
 
   ggsave(
-    "figs/FigureED6.png",
+    "figs/FigureED6.jpg",
     plot = cash_flow_plot,
-    width = 180, height = 180, units = "mm")
-  ggsave(
-    "figs/FigureED6.svg",
-    plot = cash_flow_plot,
-    width = 180, height = 180, unit = "mm")
-  
+    width = 180, height = 180, units = "mm")  
   show(cash_flow_plot)
 }

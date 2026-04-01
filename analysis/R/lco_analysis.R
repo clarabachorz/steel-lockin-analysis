@@ -565,8 +565,8 @@ plot_weighted_lcop <- function(gdx, fs=10, save_data = FALSE, save_plot = FALSE,
         labs(y = "LCOP [$/t]", fill="Cost Component",
             x = "Period", title = paste0("Average levelized cost of steel, weighted by production route (", scenario_name, ")"))
     if(save_plot){
-        ggsave(filename = paste0("./figs/lcop/lcop_avg_", gsub(" ", "_", scenario_name), ".png"),
-            width= 8, height = 6, device='png', dpi=300)
+        ggsave(filename = paste0("./figs/lcop/lcop_avg_", gsub(" ", "_", scenario_name), ".jpg"),
+            width= 8, height = 6, device='jpg', dpi=300)
     }
     return(p.lcop)
 }
@@ -735,8 +735,8 @@ plot_average_lcop <- function(gdx, fs = 10, save_plot = FALSE, scenario_name = "
 
     # save plot
     if(save_plot){
-        ggsave(filename = paste0("./figs/lcop/lcop_byroute_", gsub(" ", "_", scenario_name), ".png"),
-             width = 6, height = 5, device='png', dpi=300)
+        ggsave(filename = paste0("./figs/lcop/lcop_byroute_", gsub(" ", "_", scenario_name), ".jpg"),
+             width = 6, height = 5, device='jpg', dpi=300)
     }
     return(p.drieaf)
 }

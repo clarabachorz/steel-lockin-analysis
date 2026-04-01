@@ -75,9 +75,9 @@ scen_names <- list(
     "FastTransition_40yrBFBOF-PkBudg820" = "Fast Transition (40yr BF-BOF)"
 )
 
-write_images <- function (fig, name, height, width = mm(180), formats = c('png', 'svg')) {
+write_images <- function (fig, name, height, width = mm(180), formats = c('jpg', 'pdf')) {
     for (f in formats) {
-        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps')) {
+        if (!f %in% c('png', 'svg', 'pdf', 'ps', 'eps', 'jpg')) {
             stop(paste0('Unknown format', f))
         }
         path <- paste0("./figs/", name, ".", f)
