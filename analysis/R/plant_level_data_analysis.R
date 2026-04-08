@@ -1117,6 +1117,15 @@ plot_simplified_cumu_emissions <- function(REMIND_cumu_emissions){
       vjust = -0.3
     ) +
     geom_textpath(
+      data = subset(data_cumu_final, Category == "REMIND_cumu_emissions"),
+      aes(label = "Continued investments\nin coal\u2013based capacity"),
+      color = "#b11d36",
+      text_only = TRUE,
+      size = 2.3,
+      hjust = 0.85,
+      vjust = 1.2
+    ) +
+    geom_textpath(
       data = subset(data_cumu_final, Category == "Cumu_oldBOF_andnew"),
       aes(label = "Committed if plans proceed"),
       color = "#c77100",
@@ -1126,13 +1135,31 @@ plot_simplified_cumu_emissions <- function(REMIND_cumu_emissions){
       vjust = -0.3
     ) +
     geom_textpath(
+      data = subset(data_cumu_final, Category == "Cumu_oldBOF_andnew"),
+      aes(label = "Planned projects built,\nexisting plants refurbished"),
+      color = "#c77100",
+      text_only = TRUE,
+      size = 2.3,
+      hjust = 0.88,
+      vjust = 1.2
+    ) +
+    geom_textpath(
       data = subset(data_cumu_final, Category == "Cumu_oldBOF_modified"),
       aes(label = "Best case"),
       color = "#186903",
       text_only = TRUE,
       size = 3,
-      hjust = 0.8,
+      hjust = 0.84,
       vjust = -0.3
+    ) +
+    geom_textpath(
+      data = subset(data_cumu_final, Category == "Cumu_oldBOF_modified"),
+      aes(label = "Planned plants cancelled,\nno further refurbishments"),
+      color = "#186903",
+      text_only = TRUE,
+      size = 2.3,
+      hjust = 0.87,
+      vjust = 1.2
     ) +
     labs(title = "The steel sector risks locking in decades of CO2 emissions,\nbut most can still be avoided",
          x = NULL,
@@ -1152,12 +1179,12 @@ plot_simplified_cumu_emissions <- function(REMIND_cumu_emissions){
     ) +
     scale_x_continuous(breaks = x_breaks, expand = c(0.01, 0)) +
     scale_y_continuous(
-      name = "Cumulative Emissions",
+      name = "Cumulative emissions",
       labels = function(x) paste0(x, " billion\ntons CO\u2082"),
       limits = c(0, 118),
       sec.axis = sec_axis(
         ~ . / 585 * 100,
-        name = "Share of carbon budget\n(warming below 1.7°C, from 2025)",
+        name = "Share of carbon budget\n(from 2025, for keeping warming below 1.7°C)",
         labels = function(x) paste0(round(x, 1), " %")
       )
     ) +
