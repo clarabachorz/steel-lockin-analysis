@@ -41,7 +41,7 @@ Finally, `inputdata/worldsteel` contains processed data from the World Steel Ass
 
 ## How to cite this work
 
-Bachorz, C., Dürrwächter, J., Gong, C. C., Odenweller, A., Pehl, M., Schreyer, F., Verpoort, P. C., Ueckerdt, F., & Luderer, G. (2026). Research software for "Averting the steel carbon lock-in through strategic green investments" (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.19372559
+Bachorz, C., Dürrwächter, J., Gong, C. C., Odenweller, A., Pehl, M., Schreyer, F., Verpoort, P. C., Luderer, G., & Ueckerdt, F. (2026). Research software for "Averting the steel carbon lock-in through strategic green investments" (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.19372559
 
 ## License
 The code contained in this repository is available for use under an [MIT license](https://opensource.org/license/mit).
